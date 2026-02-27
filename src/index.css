@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-neutral-200;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2.5 rounded-btn font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-btn text-sm;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-dark focus:ring-primary hover:shadow-btn-hover;
+  }
+
+  .btn-secondary {
+    @apply bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 focus:ring-neutral-200;
+  }
+
+  .btn-danger {
+    @apply bg-error text-white hover:bg-red-600 focus:ring-error;
+  }
+
+  .card {
+    @apply bg-white rounded-card shadow-card border border-neutral-100/80 p-6 transition-all duration-300;
+  }
+
+  .card-hover:hover {
+    @apply shadow-card-hover -translate-y-0.5;
+  }
+
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-light;
+  }
+
+  .page-header {
+    @apply mb-8;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-neutral-900 tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-neutral-500 mt-1;
+  }
+
+  .stat-card {
+    @apply card card-hover relative overflow-hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-primary-400 to-accent rounded-t-card;
+  }
+}
+
+@layer utilities {
+  .animate-stagger>* {
+    animation: fadeIn 0.4s ease-out both;
+  }
+
+  .animate-stagger>*:nth-child(1) {
+    animation-delay: 0ms;
+  }
+
+  .animate-stagger>*:nth-child(2) {
+    animation-delay: 60ms;
+  }
+
+  .animate-stagger>*:nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  .animate-stagger>*:nth-child(4) {
+    animation-delay: 180ms;
+  }
+
+  .animate-stagger>*:nth-child(5) {
+    animation-delay: 240ms;
+  }
+
+  .animate-stagger>*:nth-child(6) {
+    animation-delay: 300ms;
+  }
+}

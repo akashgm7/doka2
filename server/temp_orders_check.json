@@ -1,0 +1,72 @@
+[
+  {
+    "id": "699d3bed9be2c5b021d5d494",
+    "isMMC": true,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-24T05:49:33.672Z"
+  },
+  {
+    "id": "699d26309be2c5b021d5d3ea",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-24T04:16:48.633Z"
+  },
+  {
+    "id": "699d1f2e9be2c5b021d5d33b",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-24T03:46:54.224Z"
+  },
+  {
+    "id": "699d1ece9be2c5b021d5d295",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-24T03:45:18.730Z"
+  },
+  {
+    "id": "699c33fedd205792e8b2a9ca",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T11:03:26.632Z"
+  },
+  {
+    "id": "699c32ffdd205792e8b2a87c",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T10:59:11.920Z"
+  },
+  {
+    "id": "699c3295dd205792e8b2a7e7",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T10:57:25.260Z"
+  },
+  {
+    "id": "699c327cdd205792e8b2a757",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T10:57:00.738Z"
+  },
+  {
+    "id": "699c323ddd205792e8b2a696",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T10:55:57.847Z"
+  },
+  {
+    "id": "699c2f14dd205792e8b2a541",
+    "isMMC": false,
+    "factoryId": "MISSING",
+    "storeId": "MISSING",
+    "createdAt": "2026-02-23T10:42:28.073Z"
+  }
+]

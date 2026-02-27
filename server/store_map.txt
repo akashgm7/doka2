@@ -1,0 +1,7 @@
+Current Stores:
+ - Name: "Central Kitchen", ID: 6996a03e2360532bcd997820
+ - Name: "Downtown Bakery", ID: 6996a03e2360532bcd99781e
+ - Name: "Uptown Café", ID: 6996a03e2360532bcd99781f
+ - Name: "gdh", ID: 6996b07223c9eb659d935c79
+ - Name: "pace wisdom", ID: 699bfe772568693a38ae581d
+ - Name: "test1", ID: 699d8a0b9cc0a97a8cc3bcca

@@ -1,0 +1,28 @@
+{
+  "storeManager": {
+    "email": "store@cake.com",
+    "assignedOutlets": [
+      "69968e8afbcf3253810400a1"
+    ],
+    "assignedBrand": "brand-001"
+  },
+  "factoryManager": {
+    "email": "factory@cake.com",
+    "assignedFactory": "69968e8afbcf3253810400a3"
+  },
+  "areaManager": {
+    "email": "area@cake.com",
+    "assignedOutlets": [
+      "69968e8afbcf3253810400a1",
+      "69968e8afbcf3253810400a2"
+    ]
+  },
+  "matchingOrdersForStoreManager": 0,
+  "sampleOrderStoreIds": [
+    "store-001",
+    "store-002",
+    null,
+    "store-001",
+    "store-003"
+  ]
+}

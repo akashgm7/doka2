@@ -1,0 +1,7 @@
+Connecting to DBs...
+Total Orders: 49
+Store ID counts in orders: {"store-002":2,"store-003":1,"undefined":43,"store-001":2,"67be5696660167cf4794931a":1}
+Total Stores: 0
+Managers found: 2
+ - area@cake.com (Area Manager) Assigned: ["6996a03e2360532bcd99781e","6996a03e2360532bcd99781f"]
+ - store@cake.com (Store Manager) Assigned: ["6996a03e2360532bcd99781e"]

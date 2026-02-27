@@ -1,0 +1,24 @@
+--- DB Check ---
+Checking Users in both DBs...
+Users in doka_admin_db: 1
+ - store@cake.com (Role: Store Manager) Assigned: ["6996a03e2360532bcd99781e"]
+Users in doka_cake_app: 1
+ - store@cake.com (Role: Store Manager) Assigned: ["6996a03e2360532bcd99781e"]
+
+Checking Stores in both DBs...
+Stores in doka_admin_db: 6
+ - Central Kitchen (6996a03e2360532bcd997820)
+ - Downtown Bakery (6996a03e2360532bcd99781e)
+ - Uptown Café (6996a03e2360532bcd99781f)
+ - gdh (6996b07223c9eb659d935c79)
+ - pace wisdom (699bfe772568693a38ae581d)
+ - test1 (699d8a0b9cc0a97a8cc3bcca)
+Stores in doka_cake_app: 0
+
+Checking Orders in doka_cake_app...
+Orders with defined storeId: 50
+ - Order ORD-1010: storeId="store-002" (type: string)
+ - Order ORD-1006: storeId="store-002" (type: string)
+ - Order ORD-1005: storeId="store-003" (type: string)
+ - Order 699bda0a6159c84c90cd79cf: storeId="undefined" (type: undefined)
+ - Order 699bf59c715085c84c02458b: storeId="undefined" (type: undefined)

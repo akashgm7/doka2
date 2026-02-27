@@ -1,0 +1,101 @@
+--- LATEST MMC ORDER ---
+{
+  "_id": "699d3bed9be2c5b021d5d494",
+  "user": "699ab343f758af187f896576",
+  "orderItems": [
+    {
+      "name": "Custom Round Cake — Classic Smooth",
+      "qty": 1,
+      "image": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400",
+      "price": 53,
+      "product": "mmc-circle-strawberry-classic-medium-",
+      "customization": {
+        "shape": "circle",
+        "flavour": "strawberry",
+        "design": "classic",
+        "size": "medium",
+        "message": ""
+      },
+      "isMMC": true,
+      "_id": "699d3bed9be2c5b021d5d495"
+    }
+  ],
+  "shippingAddress": {
+    "address": "123 Fake St",
+    "city": "Fake City",
+    "postalCode": "12345",
+    "country": "Fake Country"
+  },
+  "paymentMethod": "PayPal",
+  "orderMode": "delivery",
+  "paymentStatus": "Paid",
+  "brandId": "brand-001",
+  "isMMC": true,
+  "paymentResult": {
+    "id": "mock_f6gkmpscs",
+    "status": "COMPLETED",
+    "update_time": "1771912173669",
+    "email_address": "akashrocks843@gmail.com"
+  },
+  "taxPrice": 0,
+  "shippingPrice": 8,
+  "totalPrice": 61,
+  "isPaid": true,
+  "paidAt": "2026-02-24T05:49:33.669Z",
+  "isDelivered": true,
+  "status": "Delivered",
+  "earnedLoyaltyPoints": 61,
+  "redeemedLoyaltyPoints": 0,
+  "discountAmount": 0,
+  "createdAt": "2026-02-24T05:49:33.672Z",
+  "updatedAt": "2026-02-24T05:58:18.620Z",
+  "__v": 0,
+  "deliveredAt": "2026-02-24T05:58:18.620Z"
+}
+
+--- LATEST STD ORDER ---
+{
+  "_id": "699d26309be2c5b021d5d3ea",
+  "user": "699ab343f758af187f896576",
+  "orderItems": [
+    {
+      "name": "Strawberry Bliss",
+      "qty": 1,
+      "image": "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=500&auto=format&fit=crop&q=60",
+      "price": 40,
+      "product": "6993eeed13611ae5558a82e3",
+      "isMMC": false,
+      "_id": "699d26309be2c5b021d5d3eb"
+    }
+  ],
+  "shippingAddress": {
+    "address": "123 Fake St",
+    "city": "Fake City",
+    "postalCode": "12345",
+    "country": "Fake Country"
+  },
+  "paymentMethod": "PayPal",
+  "orderMode": "delivery",
+  "paymentStatus": "Paid",
+  "brandId": "brand-001",
+  "isMMC": false,
+  "paymentResult": {
+    "id": "mock_ynrq0w4d0",
+    "status": "COMPLETED",
+    "update_time": "1771906608630",
+    "email_address": "akashrocks843@gmail.com"
+  },
+  "taxPrice": 0,
+  "shippingPrice": 8,
+  "totalPrice": 48,
+  "isPaid": true,
+  "paidAt": "2026-02-24T04:16:48.630Z",
+  "isDelivered": false,
+  "status": "Pending",
+  "earnedLoyaltyPoints": 48,
+  "redeemedLoyaltyPoints": 0,
+  "discountAmount": 0,
+  "createdAt": "2026-02-24T04:16:48.633Z",
+  "updatedAt": "2026-02-24T04:16:48.633Z",
+  "__v": 0
+}
