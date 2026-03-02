@@ -129,30 +129,85 @@ const getOrderById = async (req, res) => {
 };
 
 // @desc    Update order status
-// @route   PUT /api/orders/:id/status
+// @route   PATCH /api/orders/:id/status
 // @access  Private
 const updateOrderStatus = async (req, res) => {
     const { status, internalNotes } = req.body;
+    const { role } = req.user;
+
+    // Check if user is Brand Admin or Store Manager
+    if (!['Brand Admin', 'Store Manager', 'Area Manager', 'Super Admin', 'Factory User', 'Factory Manager'].includes(role)) {
+        return res.status(403).json({ message: 'Not authorized to update order status' });
+    }
 
     try {
         let order;
         if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-            order = await Order.findById(req.params.id);
+            order = await Order.findById(req.params.id).populate('user');
         }
 
         if (!order) {
-            order = await Order.findOne({ orderId: req.params.id });
+            order = await Order.findOne({ orderId: req.params.id }).populate('user');
         }
 
-        if (order) {
-            if (status) order.status = status;
-            if (internalNotes) order.internalNotes = internalNotes;
-
-            const updatedOrder = await order.save();
-            res.json(updatedOrder);
-        } else {
-            res.status(404).json({ message: 'Order not found' });
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
         }
+
+        if (status) {
+            console.log('--- BACKEND STATUS UPDATE DEBUG ---');
+            console.log('Request Params ID:', req.params.id);
+            console.log('Requested Status:', status);
+            console.log('Current Order Status in DB:', order.status);
+
+            const currentStatus = order.status?.toUpperCase() || 'PENDING';
+            const requestedStatus = status.toUpperCase();
+
+            console.log('Normalized Current:', currentStatus);
+            console.log('Normalized Requested:', requestedStatus);
+
+            const validTransitions = {
+                'PENDING': ['CONFIRMED', 'CANCELLED'],
+                'CONFIRMED': ['IN_PRODUCTION', 'CANCELLED'],
+                'IN_PRODUCTION': ['READY', 'CANCELLED'],
+                'READY': ['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
+                'OUT_FOR_DELIVERY': ['DELIVERED', 'CANCELLED']
+            };
+
+            // If a transition is requested, validate it
+            if (currentStatus !== requestedStatus) {
+                const allowed = validTransitions[currentStatus] || [];
+                if (!allowed.includes(requestedStatus)) {
+                    console.error(`[TRANSITION ERROR] ${currentStatus} -> ${requestedStatus} NOT ALLOWED`);
+                    return res.status(400).json({
+                        message: `Invalid status transition: ${order.status} -> ${status}`
+                    });
+                }
+                order.status = requestedStatus;
+
+                // Sync legacy delivered flag if needed
+                if (requestedStatus === 'DELIVERED') {
+                    order.isDelivered = true;
+                }
+            }
+        }
+
+        if (internalNotes) order.internalNotes = internalNotes;
+
+        const updatedOrder = await order.save();
+
+        // Emit Socket.IO event for real-time synchronization
+        const io = req.app.get('io');
+        if (io) {
+            console.log(`[Socket] Emitting orderStatusUpdated: ${order._id}, ${status}`);
+            io.emit('orderStatusUpdated', {
+                orderId: order._id,
+                status: order.status,
+                orderNumber: order.orderId
+            });
+        }
+
+        res.json(updatedOrder);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }

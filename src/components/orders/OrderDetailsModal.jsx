@@ -7,12 +7,13 @@ import toast from 'react-hot-toast';
 
 const StatusBadge = ({ status }) => {
     const colors = {
-        'Pending': 'bg-yellow-100 text-yellow-800',
-        'Confirmed': 'bg-blue-100 text-blue-800',
-        'In Production': 'bg-purple-100 text-purple-800',
-        'Ready': 'bg-indigo-100 text-indigo-800',
-        'Delivered': 'bg-green-100 text-green-800',
-        'Cancelled': 'bg-red-100 text-red-800',
+        'PENDING': 'bg-yellow-100 text-yellow-800',
+        'CONFIRMED': 'bg-blue-100 text-blue-800',
+        'IN_PRODUCTION': 'bg-purple-100 text-purple-800',
+        'READY': 'bg-indigo-100 text-indigo-800',
+        'OUT_FOR_DELIVERY': 'bg-orange-100 text-orange-800',
+        'DELIVERED': 'bg-green-100 text-green-800',
+        'CANCELLED': 'bg-red-100 text-red-800',
     };
     return (
         <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100'}`}>
@@ -24,24 +25,36 @@ const StatusBadge = ({ status }) => {
 const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrder, userRole }) => {
     const [delivery, setDelivery] = useState(null);
     const [loadingDelivery, setLoadingDelivery] = useState(false);
-    const [internalNotes, setInternalNotes] = useState(''); // Added state for internal notes
+    const [internalNotes, setInternalNotes] = useState('');
+    const [currentOrder, setCurrentOrder] = useState(order); // Local state for immediate updates
 
     useEffect(() => {
         if (isOpen && order) {
             fetchDeliveryInfo();
-            setInternalNotes(order.internalNotes || ''); // Initialize internal notes
+            setInternalNotes(order.internalNotes || '');
+            setCurrentOrder(order); // Sync with prop when order changes
         } else {
             setDelivery(null);
-            setInternalNotes(''); // Clear notes when modal closes
+            setInternalNotes('');
         }
     }, [isOpen, order]);
 
-    const getOrderId = () => order._id || order.id || order.orderId;
+    const displayOrder = currentOrder || order;
+
+    if (!displayOrder) return null;
+
+    const getOrderId = () => {
+        const id = displayOrder._id || displayOrder.id || (typeof displayOrder === 'string' ? displayOrder : null);
+        console.log('[DEBUG] getOrderId:', id, 'from:', displayOrder);
+        return id;
+    };
 
     const fetchDeliveryInfo = async () => {
         setLoadingDelivery(true);
         try {
-            const data = await deliveryService.getDeliveryDetails(getOrderId());
+            const orderId = getOrderId();
+            if (!orderId) return;
+            const data = await deliveryService.getDeliveryDetails(orderId);
             setDelivery(data);
         } catch (error) {
             console.error(error);
@@ -67,7 +80,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
 
             // Sync with main order status if applicable
             if (status === 'DELIVERED') {
-                onUpdateStatus(order.id, 'Delivered');
+                onUpdateStatus(displayOrder.id, 'Delivered');
             }
             toast.success(`Webhook: ${status} Received`);
         } catch (error) {
@@ -81,7 +94,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
 
         const toastId = toast.loading("Escalating order...");
         try {
-            await orderService.updateOrderStatus(getOrderId(), order.status, { isEscalated: true, escalationReason: reason });
+            await orderService.updateOrderStatus(getOrderId(), displayOrder.status, { isEscalated: true, escalationReason: reason });
             toast.success("Order escalated to Area Manager", { id: toastId });
             onClose();
         } catch (error) {
@@ -112,19 +125,32 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
         try {
             await orderService.updateOrderInternalNotes(getOrderId(), internalNotes);
             toast.success("Internal notes saved!", { id: toastId });
-            // Optionally, refresh order data or update local state to reflect change
-            // onUpdateStatus(order.id, order.status); // This might trigger a full refresh if needed
         } catch (error) {
             console.error("Failed to save internal notes:", error);
             toast.error("Failed to save notes.", { id: toastId });
         }
     };
 
-    if (!order) return null;
+    const handleStatusUpdate = async (status) => {
+        const id = getOrderId();
+        console.log('[DEBUG] handleStatusUpdate initiating:', { id, status });
+        try {
+            if (onUpdateStatus && id) {
+                const updatedOrder = await onUpdateStatus(id, status);
+                if (updatedOrder) {
+                    setCurrentOrder(updatedOrder);
+                }
+            }
+        } catch (error) {
+            console.error("Status update failed", error);
+        }
+    };
 
     const Actions = () => {
-        // MMC Read-only Guard for non-factory users
-        if (order.isMMC && userRole !== 'Super Admin' && userRole !== 'Factory User') {
+        const STATUS_FLOW = ["PENDING", "CONFIRMED", "IN_PRODUCTION", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
+
+        // MMC Read-only Guard
+        if (displayOrder.isMMC && userRole !== 'Super Admin' && userRole !== 'Factory User' && userRole !== 'Factory Manager') {
             return (
                 <div className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg text-xs font-semibold">
                     <AlertCircle size={14} />
@@ -133,167 +159,111 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
             );
         }
 
-        // Factory User Actions
-        if (userRole === 'Factory User') {
-            const canReject = ['Pending', 'Confirmed'].includes(order.status);
+        const currentIndex = STATUS_FLOW.indexOf(displayOrder.status?.toUpperCase());
+        let nextStatus = currentIndex >= 0 && currentIndex < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIndex + 1] : null;
 
-            return (
-                <div className="flex gap-2 items-center w-full">
-                    {order.status === 'Pending' && (
-                        <Button size="sm" variant="primary" onClick={() => onUpdateStatus(getOrderId(), 'Confirmed')}>
-                            Accept MMC
-                        </Button>
-                    )}
-                    {order.status === 'Confirmed' && (
-                        <Button size="sm" variant="primary" icon={Play} onClick={() => onUpdateStatus(getOrderId(), 'In Production')}>
-                            Start Production
-                        </Button>
-                    )}
-                    {order.status === 'In Production' && (
-                        <Button size="sm" variant="primary" icon={CheckCircle} onClick={() => onUpdateStatus(getOrderId(), 'Ready')}>
-                            Mark Ready
-                        </Button>
-                    )}
-                    {order.status === 'Ready' && (
-                        <div className="flex gap-2">
-                            {!delivery && (
-                                <Button size="sm" variant="primary" icon={Navigation} onClick={handleAssignDriver}>
-                                    Dispatch
-                                </Button>
-                            )}
-                            <Button size="sm" variant="ghost" icon={Check} onClick={() => onUpdateStatus(getOrderId(), 'Delivered')}>
-                                Delivered
-                            </Button>
-                        </div>
-                    )}
-
-                    <div className="flex gap-2 ml-auto">
-                        <Button size="sm" variant="ghost" icon={Megaphone} onClick={handleSendUpdate}>
-                            Notify
-                        </Button>
-                        <Button size="sm" variant="secondary" icon={AlertTriangle} onClick={handleEscalate}>
-                            Escalate
-                        </Button>
-                        {canReject && (
-                            <Button size="sm" variant="danger" icon={XCircle} onClick={() => {
-                                const reason = window.prompt("Rejection reason:");
-                                if (reason) onUpdateStatus(getOrderId(), 'Cancelled', { cancellationReason: reason });
-                            }}>Reject</Button>
-                        )}
-                    </div>
-                </div>
-            );
+        // Skip OUT_FOR_DELIVERY for Pickup
+        if (displayOrder.status?.toUpperCase() === 'READY' && displayOrder.deliveryMode === 'Pickup') {
+            nextStatus = 'DELIVERED';
         }
 
-        // Store Manager & Operation Roles Actions
-        if (['Store Manager', 'Area Manager', 'Brand Admin'].includes(userRole)) {
-            const canCancel = ['Pending', 'Confirmed'].includes(order.status);
+        const canProgress = ['Brand Admin', 'Store Manager', 'Area Manager', 'Factory User', 'Factory Manager'].includes(userRole);
+        const canCancel = ['PENDING', 'CONFIRMED'].includes(displayOrder.status?.toUpperCase());
 
-            return (
-                <div className="flex gap-2 items-center">
-                    {order.status === 'Pending' && (
-                        <Button size="sm" variant="primary" onClick={() => onUpdateStatus(getOrderId(), 'Confirmed')}>
-                            Accept Order
-                        </Button>
-                    )}
-                    {order.status === 'Confirmed' && (
-                        <Button size="sm" variant="primary" icon={Play} onClick={() => onUpdateStatus(getOrderId(), 'In Production')}>
-                            Start Preparing
-                        </Button>
-                    )}
-                    {order.status === 'In Production' && (
-                        <Button size="sm" variant="primary" icon={CheckCircle} onClick={() => onUpdateStatus(getOrderId(), 'Ready')}>
-                            Mark as Ready
-                        </Button>
-                    )}
-                    {order.status === 'Ready' && (
-                        <div className="flex gap-2">
-                            {order.deliveryMode !== 'Pickup' && !delivery && (
-                                <Button size="sm" variant="primary" icon={Navigation} onClick={handleAssignDriver}>
-                                    Dispatch Rider
-                                </Button>
-                            )}
-                            {order.deliveryMode === 'Pickup' && (
-                                <Button size="sm" variant="primary" icon={Check} onClick={() => onUpdateStatus(getOrderId(), 'Delivered')}>
-                                    Complete Pickup
-                                </Button>
-                            )}
-                        </div>
-                    )}
+        return (
+            <div className="flex gap-2 items-center w-full">
+                {nextStatus && canProgress && (
+                    <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleStatusUpdate(nextStatus)}
+                    >
+                        Move to {nextStatus}
+                    </Button>
+                )}
 
-                    <div className="flex gap-2 ml-auto">
-                        <Button size="sm" variant="ghost" icon={Megaphone} onClick={handleSendUpdate}>
-                            Update
-                        </Button>
-                        <Button size="sm" variant="secondary" text-red-600 icon={AlertTriangle} onClick={handleEscalate} title="Escalate to Area Manager">
-                            Escalate
-                        </Button>
-                        {canCancel && (
-                            <Button size="sm" variant="danger" icon={XCircle} onClick={() => {
-                                const reason = window.prompt("Enter cancellation reason:");
-                                if (reason) {
-                                    if (onCancelOrder) onCancelOrder(getOrderId(), reason);
-                                    else onUpdateStatus(getOrderId(), 'Cancelled');
-                                }
-                            }}>Cancel</Button>
-                        )}
-                    </div>
+                <div className="flex gap-2 ml-auto">
+                    <Button size="sm" variant="ghost" icon={Megaphone} onClick={handleSendUpdate}>
+                        Notify
+                    </Button>
+                    <Button size="sm" variant="secondary" icon={AlertTriangle} onClick={handleEscalate}>
+                        Escalate
+                    </Button>
+                    {canCancel && canProgress && (
+                        <Button size="sm" variant="danger" icon={XCircle} onClick={() => {
+                            const reason = window.prompt("Enter cancellation reason:");
+                            if (reason) {
+                                if (onCancelOrder) onCancelOrder(getOrderId(), reason);
+                                else handleStatusUpdate('CANCELLED');
+                            }
+                        }}>Cancel</Button>
+                    )}
                 </div>
-            );
-        }
-
-        return null;
+            </div>
+        );
     };
 
     const calculateTotal = () => {
-        const items = order.orderItems || order.items || [];
+        const items = displayOrder.orderItems || displayOrder.items || [];
         return items.reduce((acc, item) => acc + ((item.price || 0) * (item.qty || item.quantity || 0)), 0);
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Order #${order.orderId || order.id || order._id}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`Order #${displayOrder.orderId || displayOrder.id || displayOrder._id}`}>
             <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Package className="text-neutral-400" size={20} />
+                        <h3 className="text-lg font-semibold text-neutral-900">Order Status</h3>
+                    </div>
+                    <StatusBadge status={displayOrder.status} />
+                </div>
+
                 {/* Header Info */}
                 <div className="grid grid-cols-2 gap-4 bg-neutral-50 p-4 rounded-lg text-sm">
                     <div>
                         <p className="text-neutral-500">Store</p>
-                        <p className="font-medium text-neutral-900">{order.storeName}</p>
+                        <p className="font-medium text-neutral-900">{displayOrder.storeName}</p>
                     </div>
                     <div>
                         <p className="text-neutral-500">Customer</p>
-                        <p className="font-medium text-neutral-900">{order.user?.name || 'Guest'}</p>
-                        <p className="text-[10px] text-neutral-500">{order.user?.email || ''}</p>
+                        <p className="font-medium text-neutral-900">{displayOrder.user?.name || 'Guest'}</p>
+                        <p className="text-[10px] text-neutral-500">{displayOrder.user?.email || ''}</p>
                     </div>
                     <div>
                         <p className="text-neutral-500">Brand ID</p>
-                        <p className="font-medium text-neutral-900">{order.brandId || 'N/A'}</p>
+                        <p className="font-medium text-neutral-900">{displayOrder.brandId || 'N/A'}</p>
                     </div>
                     <div>
                         <p className="text-neutral-500">Date</p>
-                        <p className="font-medium text-neutral-900">{new Date(order.date).toLocaleString()}</p>
+                        <p className="font-medium text-neutral-900">
+                            {displayOrder.createdAt || displayOrder.date
+                                ? new Date(displayOrder.createdAt || displayOrder.date).toLocaleString()
+                                : 'N/A'}
+                        </p>
                     </div>
                     <div>
                         <p className="text-neutral-500">Delivery Mode</p>
-                        <p className="font-medium text-neutral-900">{order.deliveryMode || 'Standard'}</p>
+                        <p className="font-medium text-neutral-900">{displayOrder.deliveryMode || 'Standard'}</p>
                     </div>
-                    {order.loyaltyPoints && (
+                    {displayOrder.loyaltyPoints && (
                         <div className="col-span-2 sm:col-span-1">
                             <p className="text-neutral-500">Loyalty Points</p>
                             <div className="flex gap-2 text-sm">
-                                <span className="text-green-600 font-medium">Earned: {order.loyaltyPoints.earned || 0}</span>
-                                <span className="text-blue-600 font-medium">Redeemed: {order.loyaltyPoints.redeemed || 0}</span>
+                                <span className="text-green-600 font-medium">Earned: {displayOrder.loyaltyPoints.earned || 0}</span>
+                                <span className="text-blue-600 font-medium">Redeemed: {displayOrder.loyaltyPoints.redeemed || 0}</span>
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* Custom Notes */}
-                {order.notes && (
+                {displayOrder.notes && (
                     <div className="bg-yellow-50 border border-yellow-100 p-3 rounded-lg flex gap-2 items-start shrink-0">
                         <AlertCircle className="text-yellow-600 shrink-0 mt-0.5" size={16} />
                         <div>
                             <p className="text-[10px] uppercase font-bold text-yellow-700 tracking-wider">Customer Instructions</p>
-                            <p className="text-sm text-yellow-900 leading-relaxed font-medium mt-0.5">{order.notes}</p>
+                            <p className="text-sm text-yellow-900 leading-relaxed font-medium mt-0.5">{displayOrder.notes}</p>
                         </div>
                     </div>
                 )}
@@ -365,8 +335,16 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
 
                     {/* Order Timeline */}
                     <div className="relative flex items-center justify-between mt-2 px-2">
-                        {['Pending', 'Confirmed', 'In Production', 'Ready', 'Delivered'].map((step, index) => {
-                            const steps = ['Pending', 'Confirmed', 'In Production', 'Ready', 'Delivered'];
+                        {['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED'].map((step, index) => {
+                            const steps = ['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+                            const labels = {
+                                'PENDING': 'Pending',
+                                'CONFIRMED': 'Confirmed',
+                                'IN_PRODUCTION': 'Production',
+                                'READY': 'Ready',
+                                'OUT_FOR_DELIVERY': 'Delivery',
+                                'DELIVERED': 'Delivered'
+                            };
                             const currentIdx = steps.indexOf(order.status);
                             const stepIdx = steps.indexOf(step);
                             const isCompleted = stepIdx <= currentIdx;
@@ -377,7 +355,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                                     <div className={`w-3 h-3 rounded-full mb-1 border-2 transition-colors ${isCompleted ? 'bg-primary border-primary' : 'bg-white border-gray-300'
                                         } ${isCurrent ? 'ring-2 ring-primary/30' : ''}`} />
                                     <span className={`text-[10px] uppercase font-semibold ${isCompleted ? 'text-primary' : 'text-gray-400'
-                                        }`}>{step}</span>
+                                        }`}>{labels[step]}</span>
 
                                     {/* Connector Line */}
                                     {index < steps.length - 1 && (
@@ -388,7 +366,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                             );
                         })}
                     </div>
-                    {order.status === 'Cancelled' && (
+                    {order.status === 'CANCELLED' && (
                         <div className="bg-red-50 text-red-800 p-3 rounded-md text-sm">
                             <span className="font-bold">Cancelled:</span> {order.cancellationReason || 'No reason provided'}
                         </div>
@@ -396,7 +374,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                 </div>
 
                 {/* Delivery Tracker Section */}
-                {(delivery || (order.status !== 'Cancelled' && (order.status === 'Ready' || order.status === 'Delivered'))) && (
+                {(delivery || (order.status?.toUpperCase() !== 'CANCELLED' && (order.status?.toUpperCase() === 'READY' || order.status?.toUpperCase() === 'DELIVERED'))) && (
                     <div className="border border-blue-100 bg-blue-50/50 rounded-lg p-4">
                         <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
                             <Truck size={16} /> Delivery Tracking

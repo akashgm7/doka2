@@ -47,6 +47,14 @@ const notificationSchema = new mongoose.Schema({
         type: String, // ID of the brand if scoped
         default: null
     },
+    storeId: {
+        type: String, // ID of the store for store-specific notifications
+        default: null
+    },
+    orderId: {
+        type: String, // Linked order ID for "View Order" functionality
+        default: null
+    },
     sentAt: {
         type: Date,
         default: Date.now

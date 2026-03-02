@@ -57,8 +57,8 @@ const orderSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Confirmed', 'Baking', 'In Production', 'Ready', 'Delivered', 'Cancelled'],
-        default: 'Pending',
+        enum: ['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
+        default: 'PENDING',
     },
     // Admin Specific / Metadata
     storeId: String,

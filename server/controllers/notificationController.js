@@ -75,7 +75,13 @@ const getNotificationHistory = async (req, res) => {
             // Store Manager sees notifications targeted at their role or their staff
             query.$and = [
                 { target: { $in: ['Store Manager', 'Store Staff', 'Staff'] } },
-                { $or: [{ brandId: assignedBrand }, { brandId: null }] }
+                { $or: [{ brandId: assignedBrand }, { brandId: null }] },
+                {
+                    $or: [
+                        { storeId: null },
+                        { storeId: { $in: req.user.assignedOutlets || [] } }
+                    ]
+                }
             ];
         } else if (role === 'Factory Manager') {
             query.$and = [
@@ -138,6 +144,18 @@ const getMyNotifications = async (req, res) => {
             query.$or = [
                 { brandId: assignedBrand },
                 { brandId: null }
+            ];
+        }
+
+        // Store Managers only see notifications that are store-agnostic OR meant for their specific stores
+        if (role === 'Store Manager') {
+            query.$and = [
+                {
+                    $or: [
+                        { storeId: null },
+                        { storeId: { $in: req.user.assignedOutlets || [] } }
+                    ]
+                }
             ];
         }
 

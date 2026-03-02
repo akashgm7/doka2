@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { setGlobalSearch } from '../features/ui/uiSlice';
 import { orderService } from '../services/orderService';
 import { brandService } from '../services/brandService';
@@ -25,10 +26,27 @@ const OrderManagement = () => {
     const [dateRange, setDateRange] = useState('All Time');
     const searchTerm = useSelector((state) => state.ui?.globalSearch || '');
     const dispatch = useDispatch();
+    const location = useLocation();
     const [locations, setLocations] = useState([]);
 
     useEffect(() => { loadOrders(); }, [user, filterStatus, selectedLocation, dateRange]);
     useEffect(() => { loadLocations(); }, []);
+
+    // Handle initial order detail view from notification link
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const orderIdFromUrl = queryParams.get('id');
+
+        if (orderIdFromUrl && orders.length > 0) {
+            const orderToOpen = orders.find(o =>
+                (o.orderId === orderIdFromUrl) || (o._id === orderIdFromUrl) || (o.id === orderIdFromUrl)
+            );
+            if (orderToOpen) {
+                setSelectedOrder(orderToOpen);
+                setIsModalOpen(true);
+            }
+        }
+    }, [location.search, orders]);
 
     // Socket.io for Real-time Updates
     useEffect(() => {
@@ -103,10 +121,15 @@ const OrderManagement = () => {
         if (user.role === 'Super Admin') return;
         const toastId = toast.loading("Updating status...");
         try {
-            await orderService.updateOrderStatus(orderId, newStatus);
+            const updatedOrder = await orderService.updateOrderStatus(orderId, newStatus);
             toast.success(`Order ${newStatus}`, { id: toastId });
-            setIsModalOpen(false);
+
+            // Update the selected order so the modal reflects the change immediately
+            setSelectedOrder(updatedOrder);
+
+            // Refresh order list in background
             loadOrders();
+            return updatedOrder;
         } catch (error) { toast.error(error.message, { id: toastId }); }
     };
 
@@ -123,13 +146,13 @@ const OrderManagement = () => {
     const isDelayed = (order) => {
         const orderTime = new Date(order.date || order.createdAt).getTime();
         const diffInMinutes = (Date.now() - orderTime) / (1000 * 60);
-        if (order.status === 'Pending' && diffInMinutes > 30) return true;
-        if (order.status === 'In Production' && diffInMinutes > 120) return true;
+        if (order.status === 'PENDING' && diffInMinutes > 30) return true;
+        if (order.status === 'IN_PRODUCTION' && diffInMinutes > 120) return true;
         return false;
     };
 
     const isNewArrival = (row) => {
-        if (row.status !== 'Pending') return false;
+        if (row.status !== 'PENDING') return false;
         const id = row.orderId || row.id || row._id;
         if (newOrderIds.has(id)) return true;
         // Also consider orders created in the last 5 minutes as "new" for visual persistence
@@ -205,8 +228,8 @@ const OrderManagement = () => {
         }
     ];
 
-    const pendingCount = orders.filter(o => o.status === 'Pending').length;
-    const activeCount = orders.filter(o => ['Preparing', 'In Production', 'Confirmed'].includes(o.status)).length;
+    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
+    const activeCount = orders.filter(o => ['IN_PRODUCTION', 'CONFIRMED', 'READY', 'OUT_FOR_DELIVERY'].includes(o.status)).length;
 
     return (
         <div className="space-y-6">
@@ -289,12 +312,13 @@ const OrderManagement = () => {
                         <Filter size={15} className="text-neutral-400 shrink-0" />
                         <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                             <option value="All">All Status</option>
-                            <option value="Pending">Pending</option>
-                            <option value="Confirmed">Confirmed</option>
-                            <option value="In Production">In Production</option>
-                            <option value="Ready">Ready</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>                        </select>
+                            <option value="PENDING">Pending</option>
+                            <option value="CONFIRMED">Confirmed</option>
+                            <option value="IN_PRODUCTION">In Production</option>
+                            <option value="READY">Ready</option>
+                            <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+                            <option value="DELIVERED">Delivered</option>
+                            <option value="CANCELLED">Cancelled</option>                        </select>
                     </div>
                 </div>
                 <Table columns={columns} data={orders} isLoading={loading} emptyMessage="No orders found matching filters." onRowClick={(row) => { setSelectedOrder(row); setIsModalOpen(true); }} />

@@ -78,12 +78,16 @@ const io = new Server(server, {
     }
 });
 
+app.set('io', io);
+
 io.on('connection', (socket) => {
     console.log('Dashboard client connected:', socket.id);
     socket.on('disconnect', () => {
         console.log('Dashboard client disconnected');
     });
 });
+
+module.exports = { app, server, io }; // Export for potential usage in other files
 
 // Real-time Order Watcher via MongoDB Change Streams
 dokaConnection.once('open', () => {
@@ -106,15 +110,32 @@ dokaConnection.once('open', () => {
             try {
                 const systemUser = await User.findOne({ role: 'Super Admin' });
                 if (systemUser) {
-                    await Notification.create({
+                    // Send to Brand Admin
+                    const brandNotif = await Notification.create({
                         title: "New Order",
                         message: `Order ${newOrder.orderId || newOrder._id.toString().slice(-6)} has been received.`,
-                        target: 'Staff',
+                        target: 'Brand Staff',
                         sender: systemUser._id,
                         type: 'Automated',
                         brandId: newOrder.brandId || null,
+                        orderId: newOrder.orderId || newOrder._id,
                         status: 'Sent'
                     });
+                    io.emit('new_notification', brandNotif);
+
+                    // Send to Store Manager specifically (or generally if no storeId)
+                    const storeNotif = await Notification.create({
+                        title: "New Order",
+                        message: `Order ${newOrder.orderId || newOrder._id.toString().slice(-6)} has been received.`,
+                        target: 'Store Manager',
+                        sender: systemUser._id,
+                        type: 'Automated',
+                        brandId: newOrder.brandId || null,
+                        storeId: newOrder.storeId || null,
+                        orderId: newOrder.orderId || newOrder._id,
+                        status: 'Sent'
+                    });
+                    io.emit('new_notification', storeNotif);
                 }
             } catch (err) {
                 console.error("Auto-notification Error:", err);

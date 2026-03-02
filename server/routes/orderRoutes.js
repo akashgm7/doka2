@@ -10,6 +10,6 @@ router.route('/:id')
     .get(protect, hasPermission('view_orders'), getOrderById);
 
 router.route('/:id/status')
-    .put(protect, hasPermission('manage_orders'), updateOrderStatus);
+    .patch(protect, hasPermission('manage_orders'), updateOrderStatus);
 
 module.exports = router;
