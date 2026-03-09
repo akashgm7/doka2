@@ -7,8 +7,8 @@ const getStores = async (req, res) => {
     try {
         let query = {};
 
-        // Role-based scoping
-        if (req.user && req.user.role !== 'Super Admin') {
+        // Scope-based scoping
+        if (req.user && req.user.scopeLevel !== 'System') {
             // Brand Admin, Area Manager, etc. only see their brand's stores
             // Note: assignedBrand is the property used in User model
             const brandId = req.user.assignedBrand;

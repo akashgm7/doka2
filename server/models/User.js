@@ -18,8 +18,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['Super Admin', 'Brand Admin', 'Area Manager', 'Store Manager', 'Store User', 'Factory Manager'],
-        default: 'Store User'
+        default: 'Customers'
     },
     // Scope fields
     assignedBrand: {
@@ -57,6 +56,9 @@ userSchema.pre('save', async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
 });
+
+const auditPlugin = require('../plugins/auditPlugin');
+userSchema.plugin(auditPlugin);
 
 const User = dokaConnection.model('User', userSchema);
 

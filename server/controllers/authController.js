@@ -42,6 +42,7 @@ const loginUser = async (req, res) => {
                     email: user.email,
                     role: user.role,
                     permissions: permissions, // Include permissions here
+                    scopeLevel: roleDetails ? (roleDetails.scopeLevel || 'None') : 'None',
                     assignedBrand: user.assignedBrand,
                     assignedFactory: user.assignedFactory,
                     assignedOutlets: user.assignedOutlets,
@@ -135,6 +136,7 @@ const getMe = async (req, res) => {
                 email: user.email,
                 role: user.role,
                 permissions: permissions,
+                scopeLevel: roleDetails ? (roleDetails.scopeLevel || 'None') : 'None',
                 assignedBrand: user.assignedBrand,
                 assignedFactory: user.assignedFactory,
                 assignedOutlets: user.assignedOutlets

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOrders, getOrderById, updateOrderStatus } = require('../controllers/orderController');
+const { getOrders, getOrderById, updateOrderStatus, submitFeedback } = require('../controllers/orderController');
 const { protect, hasPermission } = require('../middleware/authMiddleware');
 
 router.route('/')
@@ -11,5 +11,8 @@ router.route('/:id')
 
 router.route('/:id/status')
     .patch(protect, hasPermission('manage_orders'), updateOrderStatus);
+
+router.route('/:id/feedback')
+    .post(protect, submitFeedback);
 
 module.exports = router;

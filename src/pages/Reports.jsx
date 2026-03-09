@@ -15,23 +15,33 @@ import { useSelector } from 'react-redux';
 
 const Reports = () => {
     const { user } = useSelector(state => state.auth);
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null); // Analytics data
     const [dateRange, setDateRange] = useState('This Month');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
     const [downloading, setDownloading] = useState(false);
 
     useEffect(() => {
         loadData();
-    }, [dateRange, user]);
+    }, [dateRange, customDates, user]);
 
     const loadData = async () => {
         setLoading(true);
         try {
             const result = await reportsService.getAnalyticsData(
                 dateRange,
-                user.role === 'Brand Admin' ? user.brandId : null,
-                ['Area Manager', 'Store Manager'].includes(user.role) ? user.assignedOutlets : null,
-                user.role === 'Factory User' ? user.assignedFactory : null
+                customDates,
+                user.scopeLevel === 'Brand' ? (user.brandId || user.assignedBrand) : null,
+                ['Brand', 'Outlet'].includes(user.scopeLevel) ? user.assignedOutlets : null,
+                user.scopeLevel === 'Factory' ? user.assignedFactory : null
             );
             setData(result);
         } catch (error) {
@@ -45,7 +55,7 @@ const Reports = () => {
         setDownloading(true);
         const toastId = toast.loading(`Generating ${type} report...`);
         try {
-            await reportsService.downloadReport(type, dateRange);
+            await reportsService.downloadReport(type, dateRange, customDates);
             toast.success(`${type} Report downloaded successfully`, { id: toastId });
         } catch (error) {
             toast.error("Failed to generate report", { id: toastId });
@@ -64,7 +74,12 @@ const Reports = () => {
                     <p className="page-subtitle">Business insights, financial metrics, and operational reports</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <DateRangeFilter value={dateRange} onChange={setDateRange} />
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        customDates={customDates}
+                        onCustomChange={setCustomDates}
+                    />
                     <Button
                         variant="outline"
                         icon={Download}
@@ -82,7 +97,7 @@ const Reports = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-sm font-medium text-neutral-500 mb-1">Total Revenue</p>
-                            <h3 className="text-2xl font-bold text-neutral-900">${data?.overview?.totalRevenue?.toLocaleString()}</h3>
+                            <h3 className="text-2xl font-bold text-neutral-900">₹{data?.overview?.totalRevenue?.toLocaleString()}</h3>
                             <span className="text-xs text-green-600 font-medium flex items-center mt-1">
                                 <TrendingUp size={12} className="mr-1" /> +{data?.overview?.growth}%
                             </span>
@@ -109,7 +124,7 @@ const Reports = () => {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-sm font-medium text-neutral-500 mb-1">Avg. Order Value</p>
-                            <h3 className="text-2xl font-bold text-neutral-900">${data?.overview?.avgOrderValue}</h3>
+                            <h3 className="text-2xl font-bold text-neutral-900">₹{data?.overview?.avgOrderValue}</h3>
                         </div>
                         <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
                             <CreditCard size={20} />
@@ -140,7 +155,7 @@ const Reports = () => {
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} prefix="$" />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(val) => `₹${val}`} />
                                 <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                                 <Area type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" />
                             </AreaChart>

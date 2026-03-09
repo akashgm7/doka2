@@ -39,9 +39,9 @@ const updateLoyaltyConfig = asyncHandler(async (req, res) => {
 // @route   GET /api/loyalty/stats
 // @access  Private (Admin only)
 const getLoyaltyStats = asyncHandler(async (req, res) => {
-    // If brandId is provided (Brand Admin), filter by it. Otherwise show global (Super Admin).
+    // If brandId is provided (Brand Scope), filter by it. Otherwise show global (System Scope).
     const filter = {};
-    if (req.user && req.user.role === 'Brand Admin' && req.user.assignedBrand) {
+    if (req.user && req.user.scopeLevel === 'Brand' && req.user.assignedBrand) {
         filter.brandId = req.user.assignedBrand;
     }
 

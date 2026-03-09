@@ -2,23 +2,62 @@ import React, { useState, useEffect } from 'react';
 import { auditService } from '../../services/auditService';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
-import { Search, FileText, Shield, Filter, Download } from 'lucide-react';
+import { Search, Filter, RefreshCw, Calendar, MapPin, Download, ChevronDown, ChevronRight, Info, Eye } from 'lucide-react';
+import DateRangeFilter from '../../components/dashboard/DateRangeFilter';
 import toast from 'react-hot-toast';
 
 import { useSelector, useDispatch } from 'react-redux';
-import { setGlobalSearch, clearGlobalSearch } from '../../features/ui/uiSlice';
+import { io } from 'socket.io-client';
 
 const AuditLogs = () => {
     const { user } = useSelector(state => state.auth);
-    const searchTerm = useSelector(state => state.ui?.globalSearch || '');
+    const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
+    const [newLogCount, setNewLogCount] = useState(0);
+    const [expandedLogs, setExpandedLogs] = useState(new Set());
+
+    const toggleExpand = (id) => {
+        setExpandedLogs(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showFilters, setShowFilters] = useState(false);
+    const [showFilters, setShowFilters] = useState(true);
+    const [dateRange, setDateRange] = useState('Today');
+    const [customDates, setCustomDates] = useState({
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0]
+    });
     const [filters, setFilters] = useState({
         status: 'All',
         action: 'All'
     });
+
+    useEffect(() => {
+        const socket = io(`http://${window.location.hostname}:5002`);
+
+        socket.on('new_audit_log', (newLog) => {
+            console.log('New audit log received via socket:', newLog);
+
+            // Apply current filters to the new log
+            const matchesSearch = !searchTerm || [newLog.user, newLog.action, newLog.resource].some(field =>
+                field?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            const matchesStatus = filters.status === 'All' || newLog.status === filters.status;
+            const matchesAction = filters.action === 'All' || newLog.action === filters.action;
+
+            if (matchesSearch && matchesStatus && matchesAction) {
+                setLogs(prev => [newLog, ...prev.slice(0, 199)]);
+                toast.success(`Action: ${newLog.action}`, { icon: '🛡️', duration: 3000 });
+            }
+        });
+
+        return () => socket.disconnect();
+    }, [searchTerm, filters]);
 
     useEffect(() => {
         const fetchLogs = async () => {
@@ -26,6 +65,9 @@ const AuditLogs = () => {
             try {
                 const data = await auditService.getLogs({
                     search: searchTerm,
+                    range: dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange,
+                    startDate: customDates.startDate,
+                    endDate: customDates.endDate,
                     brandId: user.role === 'Brand Admin' ? user.assignedBrand : null,
                     assignedOutlets: ['Area Manager', 'Store Manager'].includes(user.role) ? user.assignedOutlets : null,
                     assignedFactory: user.role === 'Factory Manager' ? user.assignedFactory : null,
@@ -42,7 +84,7 @@ const AuditLogs = () => {
 
         const debounce = setTimeout(fetchLogs, 500);
         return () => clearTimeout(debounce);
-    }, [searchTerm, filters]);
+    }, [searchTerm, filters, dateRange, customDates]);
 
     const handleExport = () => {
         if (logs.length === 0) {
@@ -97,68 +139,75 @@ const AuditLogs = () => {
                                 placeholder="Search by user, action, or resource..."
                                 className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary hover:border-neutral-300 transition-all"
                                 value={searchTerm}
-                                onChange={(e) => dispatch(setGlobalSearch(e.target.value))}
+                                onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        <div className="flex gap-2 relative">
-                            <button
-                                onClick={() => setShowFilters(!showFilters)}
-                                className={`flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-neutral-50 transition-colors ${showFilters ? 'border-primary text-primary bg-primary/5' : 'border-neutral-200 text-neutral-600'}`}
-                            >
-                                <Filter size={18} />
-                                <span className="hidden sm:inline">Filter</span>
-                            </button>
-                            <button
-                                onClick={handleExport}
-                                className="flex items-center gap-2 px-3 py-2 border border-neutral-200 rounded-lg text-neutral-600 hover:bg-neutral-50"
-                            >
-                                <Download size={18} />
-                                <span className="hidden sm:inline">Export</span>
-                            </button>
+                        <div className="flex items-center gap-3">
+                            <DateRangeFilter
+                                value={dateRange}
+                                onChange={setDateRange}
+                                customDates={customDates}
+                                onCustomChange={setCustomDates}
+                            />
+                            <div className="flex gap-2 relative">
+                                <button
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className={`flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-neutral-50 transition-colors ${showFilters ? 'border-primary text-primary bg-primary/5' : 'border-neutral-200 text-neutral-600'}`}
+                                >
+                                    <Filter size={18} />
+                                    <span className="hidden sm:inline">Filter</span>
+                                </button>
+                                <button
+                                    onClick={handleExport}
+                                    className="flex items-center gap-2 px-3 py-2 border border-neutral-200 rounded-lg text-neutral-600 hover:bg-neutral-50"
+                                >
+                                    <Download size={18} />
+                                    <span className="hidden sm:inline">Export</span>
+                                </button>
 
-                            {/* Filter Dropdown */}
-                            {showFilters && (
-                                <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-neutral-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-100">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-neutral-700 mb-1">Status</label>
-                                            <select
-                                                className="w-full p-2 border border-neutral-200 rounded-lg text-sm outline-none focus:border-primary"
-                                                value={filters.status}
-                                                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                                {/* Filter Dropdown */}
+                                {showFilters && (
+                                    <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-neutral-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-neutral-700 mb-1">Status</label>
+                                                <select
+                                                    className="w-full p-2 border border-neutral-200 rounded-lg text-sm outline-none focus:border-primary"
+                                                    value={filters.status}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                                                >
+                                                    <option value="All">All Statuses</option>
+                                                    <option value="Success">Success</option>
+                                                    <option value="Failed">Failed</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-neutral-700 mb-1">Action Type</label>
+                                                <select
+                                                    className="w-full p-2 border border-neutral-200 rounded-lg text-sm outline-none focus:border-primary"
+                                                    value={filters.action}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, action: e.target.value }))}
+                                                >
+                                                    <option value="All">All Actions</option>
+                                                    <option value="Create">Create (Any)</option>
+                                                    <option value="Update">Update (Any)</option>
+                                                    <option value="Login">Login</option>
+                                                    <option value="Logout">Logout</option>
+                                                </select>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setFilters({ status: 'All', action: 'All' });
+                                                    setSearchTerm('');
+                                                }}
+                                                className="w-full py-2 text-sm text-neutral-500 hover:text-neutral-900 bg-neutral-50 hover:bg-neutral-100 rounded-lg"
                                             >
-                                                <option value="All">All Statuses</option>
-                                                <option value="Success">Success</option>
-                                                <option value="Failed">Failed</option>
-                                            </select>
+                                                Reset Filters
+                                            </button>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-neutral-700 mb-1">Action Type</label>
-                                            <select
-                                                className="w-full p-2 border border-neutral-200 rounded-lg text-sm outline-none focus:border-primary"
-                                                value={filters.action}
-                                                onChange={(e) => setFilters(prev => ({ ...prev, action: e.target.value }))}
-                                            >
-                                                <option value="All">All Actions</option>
-                                                <option value="Login">Login</option>
-                                                <option value="Logout">Logout</option>
-                                                <option value="Update Order">Update Order</option>
-                                                <option value="Create User">Create User</option>
-                                                <option value="Update Settings">Update Settings</option>
-                                            </select>
-                                        </div>
-                                        <button
-                                            onClick={() => {
-                                                setFilters({ status: 'All', action: 'All' });
-                                                dispatch(clearGlobalSearch());
-                                            }}
-                                            className="w-full py-2 text-sm text-neutral-500 hover:text-neutral-900 bg-neutral-50 hover:bg-neutral-100 rounded-lg"
-                                        >
-                                            Reset Filters
-                                        </button>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -171,8 +220,8 @@ const AuditLogs = () => {
                                 <th className="p-4 font-medium text-neutral-500 text-sm">User</th>
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Action</th>
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Resource</th>
-                                <th className="p-4 font-medium text-neutral-500 text-sm">IP Address</th>
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Status</th>
+                                <th className="p-4 font-medium text-neutral-500 text-sm text-right">Details</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -186,33 +235,64 @@ const AuditLogs = () => {
                                 </tr>
                             ) : (
                                 logs.map((log) => (
-                                    <tr key={log._id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50">
-                                        <td className="p-4 text-sm text-neutral-600 whitespace-nowrap">
-                                            {new Date(log.timestamp).toLocaleString()}
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                                                    {log.user.charAt(0)}
+                                    <React.Fragment key={log._id}>
+                                        <tr
+                                            className={`border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 cursor-pointer transition-colors ${expandedLogs.has(log._id) ? 'bg-neutral-50' : ''}`}
+                                            onClick={() => log.details && toggleExpand(log._id)}
+                                        >
+                                            <td className="p-4 text-sm text-neutral-600 whitespace-nowrap">
+                                                {new Date(log.timestamp).toLocaleString()}
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                                                        {log.user.charAt(0)}
+                                                    </div>
+                                                    <span className="text-sm font-medium text-neutral-900">{log.user}</span>
                                                 </div>
-                                                <span className="text-sm font-medium text-neutral-900">{log.user}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-sm text-neutral-900 font-medium">
-                                            {log.action}
-                                        </td>
-                                        <td className="p-4 text-sm text-neutral-600">
-                                            {log.resource}
-                                        </td>
-                                        <td className="p-4 text-sm text-neutral-500 font-mono">
-                                            {log.ip}
-                                        </td>
-                                        <td className="p-4">
-                                            <Badge variant={log.status === 'Success' ? 'success' : 'error'} size="sm">
-                                                {log.status}
-                                            </Badge>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td className="p-4 text-sm text-neutral-900 font-medium">
+                                                {log.action}
+                                            </td>
+                                            <td className="p-4 text-sm text-neutral-600">
+                                                {log.resource}
+                                            </td>
+                                            <td className="p-4">
+                                                <Badge variant={log.status === 'Success' ? 'success' : 'error'} size="sm">
+                                                    {log.status}
+                                                </Badge>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                {log.details && (
+                                                    <button className="p-1 hover:bg-neutral-200 rounded-md transition-colors">
+                                                        {expandedLogs.has(log._id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                        {expandedLogs.has(log._id) && log.details && (
+                                            <tr className="bg-neutral-50/50 border-b border-neutral-100">
+                                                <td colSpan="6" className="p-4 pt-0">
+                                                    <div className="bg-white rounded-xl border border-neutral-200 p-4 shadow-inner">
+                                                        <div className="flex items-center gap-2 mb-3 text-neutral-500">
+                                                            <Info size={14} />
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider">Modification Details</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                            {Object.entries(log.details).map(([key, value]) => (
+                                                                <div key={key} className="flex flex-col gap-1 p-2 bg-neutral-50 rounded-lg border border-neutral-100">
+                                                                    <span className="text-[10px] font-bold text-neutral-400 uppercase">{key}</span>
+                                                                    <span className="text-xs text-neutral-700 font-mono break-all line-clamp-2" title={typeof value === 'object' ? JSON.stringify(value) : value}>
+                                                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 ))
                             )}
                         </tbody>

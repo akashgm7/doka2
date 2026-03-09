@@ -1,10 +1,12 @@
 import api from '../utils/axiosConfig';
 
 export const reportsService = {
-    async getAnalyticsData(dateRange, brandId = null, assignedOutlets = null, assignedFactory = null) {
+    async getAnalyticsData(dateRange, customDates = {}, brandId = null, assignedOutlets = null, assignedFactory = null) {
         try {
             const params = new URLSearchParams();
             if (dateRange) params.append('dateRange', dateRange);
+            if (customDates.startDate) params.append('startDate', customDates.startDate);
+            if (customDates.endDate) params.append('endDate', customDates.endDate);
 
             const response = await api.get(`/reports/analytics?${params.toString()}`);
             return response.data;
@@ -20,11 +22,13 @@ export const reportsService = {
         }
     },
 
-    async downloadReport(type, dateRange) {
+    async downloadReport(type, dateRange, customDates = {}) {
         try {
             const params = new URLSearchParams();
             if (type) params.append('type', type);
             if (dateRange) params.append('dateRange', dateRange);
+            if (customDates.startDate) params.append('startDate', customDates.startDate);
+            if (customDates.endDate) params.append('endDate', customDates.endDate);
 
             const response = await api.get(`/reports/download?${params.toString()}`, {
                 responseType: 'blob', // Important for downloading files

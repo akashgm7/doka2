@@ -20,18 +20,15 @@ const getUsers = async (req, res) => {
         const currentUser = req.user;
         let query = {};
 
-        // Role-based scoping (mirrors frontend logic for security)
-        if (currentUser.role === 'Brand Admin') {
+        // Scope-level scoping
+        if (currentUser.scopeLevel === 'Brand') {
             query.assignedBrand = currentUser.assignedBrand;
-        } else if (currentUser.role === 'Area Manager') {
-            // Area Managers can see users in their outlets
+        } else if (currentUser.scopeLevel === 'Outlet') {
             query.assignedOutlets = { $in: currentUser.assignedOutlets || [] };
-            query.assignedBrand = currentUser.assignedBrand;
-        } else if (currentUser.role === 'Store Manager') {
-            // Store Managers see users in their store
-            query.assignedOutlets = { $in: currentUser.assignedOutlets || [] };
-        } else if (currentUser.role !== 'Super Admin') {
-            // Default restrict to nothing for others
+            query.assignedBrand = currentUser.assignedBrand; // Optional, to prevent leaking
+        } else if (currentUser.scopeLevel === 'Factory') {
+            query.assignedFactory = currentUser.assignedFactory;
+        } else if (currentUser.scopeLevel === 'None') {
             return res.status(403).json({ message: 'Not authorized to view users' });
         }
 
@@ -71,8 +68,7 @@ const createUser = async (req, res) => {
             assignedBrand: brandId || req.body.assignedBrand,
             assignedOutlets,
             assignedFactory,
-            status: 'Active',
-            loyaltyPoints: req.body.loyaltyPoints || 0
+            status: 'Active'
         });
 
         if (user) {
@@ -90,7 +86,6 @@ const createUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role,
                 loyaltyPoints: user.loyaltyPoints
             });
         } else {
@@ -119,10 +114,7 @@ const updateUser = async (req, res) => {
             user.assignedFactory = req.body.assignedFactory !== undefined ? req.body.assignedFactory : user.assignedFactory;
             user.status = req.body.status || user.status;
 
-            // Allow Super Admins to manually adjust loyalty points if provided
-            if (req.body.loyaltyPoints !== undefined && req.user.role === 'Super Admin') {
-                user.loyaltyPoints = req.body.loyaltyPoints;
-            }
+
 
             const updatedUser = await user.save();
             res.json({

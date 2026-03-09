@@ -6,6 +6,7 @@ const RoleFormModal = ({ isOpen, onClose, onSubmit, initialData = null, permissi
     const [formData, setFormData] = useState({
         name: '',
         description: '',
+        scopeLevel: 'None',
         permissions: []
     });
     const [loading, setLoading] = useState(false);
@@ -17,12 +18,14 @@ const RoleFormModal = ({ isOpen, onClose, onSubmit, initialData = null, permissi
             setFormData({
                 name: initialData.name || '',
                 description: initialData.description || '',
+                scopeLevel: initialData.scopeLevel || 'None',
                 permissions: initialData.permissions || []
             });
         } else {
             setFormData({
                 name: '',
                 description: '',
+                scopeLevel: 'None',
                 permissions: []
             });
         }
@@ -117,6 +120,23 @@ const RoleFormModal = ({ isOpen, onClose, onSubmit, initialData = null, permissi
                                 </div>
 
                                 <div>
+                                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Data Scope Level</label>
+                                    <select
+                                        className="w-full px-4 py-2 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                        value={formData.scopeLevel}
+                                        onChange={(e) => setFormData({ ...formData, scopeLevel: e.target.value })}
+                                        disabled={isEditMode && initialData?.isSystem}
+                                    >
+                                        <option value="System">System (All branches, all everything)</option>
+                                        <option value="Brand">Brand (Brand specific data)</option>
+                                        <option value="Outlet">Outlet (Outlet specific data)</option>
+                                        <option value="Factory">Factory (Factory specific data)</option>
+                                        <option value="None">None (No specific data access)</option>
+                                    </select>
+                                    <p className="mt-1 text-xs text-neutral-500 italic">Determines which locations a user can be assigned to.</p>
+                                </div>
+
+                                <div>
                                     <label className="block text-sm font-semibold text-neutral-700 mb-4 flex items-center gap-2">
                                         <Lock size={16} />
                                         System Permissions
@@ -131,8 +151,8 @@ const RoleFormModal = ({ isOpen, onClose, onSubmit, initialData = null, permissi
                                                         <label
                                                             key={perm.id}
                                                             className={`flex items-center p-3 rounded-xl border transition-all cursor-pointer ${formData.permissions.includes(perm.id)
-                                                                    ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/20'
-                                                                    : 'bg-white border-neutral-200 hover:border-neutral-300'
+                                                                ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/20'
+                                                                : 'bg-white border-neutral-200 hover:border-neutral-300'
                                                                 }`}
                                                         >
                                                             <input

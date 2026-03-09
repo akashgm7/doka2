@@ -483,17 +483,17 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-sm font-medium text-neutral-600 text-right">${item.price || 0}</td>
+                                        <td className="px-4 py-3 text-sm font-medium text-neutral-600 text-right">₹{item.price || 0}</td>
                                         <td className="px-4 py-3 text-sm font-bold text-neutral-900 text-right">x{item.qty || item.quantity}</td>
                                         <td className="px-4 py-3 text-sm font-bold text-primary text-right">
-                                            ${((item.price || 0) * (item.qty || item.quantity)).toFixed(2)}
+                                            ₹{((item.price || 0) * (item.qty || item.quantity)).toFixed(2)}
                                         </td>
                                     </tr>
                                 ))}
                                 <tr className="bg-neutral-50">
                                     <td colSpan="3" className="px-4 py-2 text-sm font-bold text-neutral-900 text-right">Total Amount</td>
                                     <td className="px-4 py-2 text-sm font-bold text-neutral-900 text-right">
-                                        ${(order.totalPrice || order.totalAmount) ? (order.totalPrice || order.totalAmount).toLocaleString() : calculateTotal().toFixed(2)}
+                                        ₹{(order.totalPrice || order.totalAmount) ? (order.totalPrice || order.totalAmount).toLocaleString() : calculateTotal().toFixed(2)}
                                     </td>
                                 </tr>
                             </tbody>

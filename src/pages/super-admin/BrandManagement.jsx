@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { brandService } from '../../services/brandService';
 import { useSelector, useDispatch } from 'react-redux';
-import { setGlobalSearch } from '../../features/ui/uiSlice';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { Plus, Edit2, Trash2, Search, Building2, CheckCircle, XCircle } from 'lucide-react';
@@ -9,7 +8,7 @@ import { Plus, Edit2, Trash2, Search, Building2, CheckCircle, XCircle } from 'lu
 const BrandManagement = () => {
     const [brands, setBrands] = useState([]);
     const [loading, setLoading] = useState(true);
-    const searchTerm = useSelector(state => state.ui?.globalSearch || '');
+    const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingBrand, setEditingBrand] = useState(null);
@@ -116,7 +115,7 @@ const BrandManagement = () => {
                             placeholder="Search brands..."
                             className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
                             value={searchTerm}
-                            onChange={(e) => dispatch(setGlobalSearch(e.target.value))}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>

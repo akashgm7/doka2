@@ -25,7 +25,7 @@ const NotificationManagement = () => {
     const [composeData, setComposeData] = useState({
         title: '',
         message: '',
-        target: isBrandAdmin ? 'Brand Users' : (isAreaManager ? 'Area Staff' : (isStoreManager ? 'Store Staff' : 'All Users'))
+        target: [] // Now an array
     });
     const [sending, setSending] = useState(false);
 
@@ -73,7 +73,7 @@ const NotificationManagement = () => {
             setComposeData({
                 title: '',
                 message: '',
-                target: isBrandAdmin ? 'Brand Users' : (isAreaManager ? 'Area Staff' : (isStoreManager ? 'Store Staff' : 'All Users'))
+                target: []
             });
             setActiveTab('history');
         } catch (error) {
@@ -132,57 +132,122 @@ const NotificationManagement = () => {
                     <Card title="Send Bulk Notification">
                         <form onSubmit={handleSend} className="space-y-4 max-w-2xl">
                             <div>
-                                <label className="block text-sm font-medium text-neutral-700 mb-1">Target Audience</label>
-                                <div className="relative">
-                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-                                    <select
-                                        className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                                        value={composeData.target}
-                                        onChange={(e) => setComposeData({ ...composeData, target: e.target.value })}
-                                    >
-                                        {!isBrandAdmin && !isAreaManager && !isStoreManager && (
-                                            <>
-                                                <optgroup label="Broadcast">
-                                                    <option value="All Users">All Users (Staff + Customers)</option>
-                                                    <option value="Staff">All Staff Only (No Customers)</option>
-                                                    <option value="Customers">All Customers Only (No Staff)</option>
-                                                </optgroup>
-                                                <optgroup label="By Role (Staff Only)">
-                                                    <option value="Brand Admins">Brand Admins Only</option>
-                                                    <option value="Area Manager">Area Managers Only</option>
-                                                    <option value="Store Manager">Store Managers Only</option>
-                                                    <option value="Factory Manager">Factory Managers Only</option>
-                                                </optgroup>
-                                            </>
-                                        )}
+                                <label className="block text-sm font-medium text-neutral-700 mb-2 flex items-center gap-2">
+                                    <Users size={18} /> Target Audience (Select multiple)
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 border border-neutral-200 rounded-lg bg-neutral-50/50">
+                                    {!isBrandAdmin && !isAreaManager && !isStoreManager && (
+                                        <>
+                                            <div className="col-span-full font-medium text-xs text-neutral-400 uppercase tracking-wider mb-1">Broadcast</div>
+                                            {[
+                                                { id: 'All Users', label: 'All Users (Staff + Customers)', icon: '📢' },
+                                                { id: 'Staff', label: 'All Staff Only', icon: '👷' },
+                                                { id: 'Customers', label: 'All Customers Only', icon: '🛍️' }
+                                            ].map(opt => (
+                                                <label key={opt.id} className="flex items-center gap-3 p-2 bg-white border border-neutral-100 rounded-md cursor-pointer hover:border-primary/30 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 text-primary rounded focus:ring-primary"
+                                                        checked={composeData.target.includes(opt.id)}
+                                                        onChange={(e) => {
+                                                            const newTargets = e.target.checked
+                                                                ? [...composeData.target, opt.id]
+                                                                : composeData.target.filter(t => t !== opt.id);
+                                                            setComposeData({ ...composeData, target: newTargets });
+                                                        }}
+                                                    />
+                                                    <span className="text-sm text-neutral-700 flex items-center gap-2">
+                                                        <span>{opt.icon}</span> {opt.label}
+                                                    </span>
+                                                </label>
+                                            ))}
 
-                                        {isBrandAdmin && (
-                                            <>
-                                                <option value="Brand Users">All Brand Users (Staff + Customers)</option>
-                                                <option value="Brand Staff">Brand Staff Only</option>
-                                                <option value="Brand Customers">Brand Customers Only</option>
-                                            </>
-                                        )}
+                                            <div className="col-span-full font-medium text-xs text-neutral-400 uppercase tracking-wider mt-4 mb-1">By Role</div>
+                                            {[
+                                                { id: 'Brand Admins', label: 'Brand Admins' },
+                                                { id: 'Area Manager', label: 'Area Managers' },
+                                                { id: 'Store Manager', label: 'Store Managers' },
+                                                { id: 'Factory Manager', label: 'Factory Managers' }
+                                            ].map(opt => (
+                                                <label key={opt.id} className="flex items-center gap-3 p-2 bg-white border border-neutral-100 rounded-md cursor-pointer hover:border-primary/30 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 text-primary rounded focus:ring-primary"
+                                                        checked={composeData.target.includes(opt.id)}
+                                                        onChange={(e) => {
+                                                            const newTargets = e.target.checked
+                                                                ? [...composeData.target, opt.id]
+                                                                : composeData.target.filter(t => t !== opt.id);
+                                                            setComposeData({ ...composeData, target: newTargets });
+                                                        }}
+                                                    />
+                                                    <span className="text-sm text-neutral-700">🔑 {opt.label}</span>
+                                                </label>
+                                            ))}
+                                        </>
+                                    )}
 
-                                        {isAreaManager && <option value="Area Staff">My Area Staff Only</option>}
-                                        {isStoreManager && <option value="Store Staff">My Store Staff Only</option>}
-                                    </select>
+                                    {isBrandAdmin && (
+                                        <>
+                                            <div className="col-span-full font-medium text-xs text-neutral-400 uppercase tracking-wider mb-1">Brand Audience</div>
+                                            {[
+                                                { id: 'Brand Users', label: 'All Brand Users', icon: '📢' },
+                                                { id: 'Brand Staff', label: 'Brand Staff Only', icon: '👷' },
+                                                { id: 'Brand Customers', label: 'Brand Customers Only', icon: '🛍️' }
+                                            ].map(opt => (
+                                                <label key={opt.id} className="flex items-center gap-3 p-2 bg-white border border-neutral-100 rounded-md cursor-pointer hover:border-primary/30 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 text-primary rounded focus:ring-primary"
+                                                        checked={composeData.target.includes(opt.id)}
+                                                        onChange={(e) => {
+                                                            const newTargets = e.target.checked
+                                                                ? [...composeData.target, opt.id]
+                                                                : composeData.target.filter(t => t !== opt.id);
+                                                            setComposeData({ ...composeData, target: newTargets });
+                                                        }}
+                                                    />
+                                                    <span className="text-sm text-neutral-700 flex items-center gap-2">
+                                                        <span>{opt.icon}</span> {opt.label}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </>
+                                    )}
+
+                                    {isAreaManager && (
+                                        <label className="flex items-center gap-3 p-2 bg-white border border-neutral-100 rounded-md cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 text-primary rounded"
+                                                checked={composeData.target.includes('Area Staff')}
+                                                onChange={(e) => {
+                                                    const newTargets = e.target.checked ? ['Area Staff'] : [];
+                                                    setComposeData({ ...composeData, target: newTargets });
+                                                }}
+                                            />
+                                            <span className="text-sm text-neutral-700">📍 My Area Staff Only</span>
+                                        </label>
+                                    )}
+
+                                    {isStoreManager && (
+                                        <label className="flex items-center gap-3 p-2 bg-white border border-neutral-100 rounded-md cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 text-primary rounded"
+                                                checked={composeData.target.includes('Store Staff')}
+                                                onChange={(e) => {
+                                                    const newTargets = e.target.checked ? ['Store Staff'] : [];
+                                                    setComposeData({ ...composeData, target: newTargets });
+                                                }}
+                                            />
+                                            <span className="text-sm text-neutral-700">🏪 My Store Staff Only</span>
+                                        </label>
+                                    )}
                                 </div>
-                                {/* Helper: show who will receive this notification */}
-                                <p className="mt-1 text-xs text-neutral-500">
-                                    {composeData.target === 'All Users' && '📢 Sent to everyone — all staff and all customers will see this.'}
-                                    {composeData.target === 'Staff' && '👷 Sent to all internal staff only. Customers will NOT see this.'}
-                                    {composeData.target === 'Customers' && '🛍️ Sent to all customers only. Staff will NOT see this.'}
-                                    {composeData.target === 'Brand Admins' && '🔑 Sent only to users with the Brand Admin role.'}
-                                    {composeData.target === 'Area Manager' && '📍 Sent only to users with the Area Manager role.'}
-                                    {composeData.target === 'Store Manager' && '🏪 Sent only to users with the Store Manager role.'}
-                                    {composeData.target === 'Factory Manager' && '🏭 Sent only to users with the Factory Manager role.'}
-                                    {composeData.target === 'Brand Users' && '📢 Sent to all users (staff + customers) under this brand.'}
-                                    {composeData.target === 'Brand Staff' && '👷 Sent to staff users under this brand only.'}
-                                    {composeData.target === 'Brand Customers' && '🛍️ Sent to customers under this brand only.'}
-                                    {composeData.target === 'Area Staff' && '📍 Sent to Area Managers and Store Managers in your area.'}
-                                    {composeData.target === 'Store Staff' && '🏪 Sent to users assigned to your specific store(s).'}
-                                </p>
+                                {composeData.target.length === 0 && (
+                                    <p className="mt-1 text-xs text-red-500">Please select at least one target audience.</p>
+                                )}
                             </div>
 
                             <div>
@@ -210,7 +275,12 @@ const NotificationManagement = () => {
                             </div>
 
                             <div className="pt-2">
-                                <Button type="submit" icon={Send} isLoading={sending}>
+                                <Button
+                                    type="submit"
+                                    icon={Send}
+                                    isLoading={sending}
+                                    disabled={composeData.target.length === 0}
+                                >
                                     Send Notification
                                 </Button>
                             </div>
@@ -242,8 +312,8 @@ const NotificationManagement = () => {
                                         </div>
                                         <h4 className="font-semibold text-neutral-900">{item.title}</h4>
                                         <p className="text-sm text-neutral-600 mt-1">{item.message}</p>
-                                        <div className="mt-2 text-xs text-neutral-500 flex items-center gap-1">
-                                            <Users size={12} /> Target: {item.target}
+                                        <div className="mt-2 text-xs text-neutral-500 flex items-center gap-1 flex-wrap">
+                                            <Users size={12} /> Target: {Array.isArray(item.target) ? item.target.join(', ') : item.target}
                                         </div>
                                     </div>
                                 ))}

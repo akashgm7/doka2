@@ -84,7 +84,7 @@ function App() {
           </RoleGuard>
         } />
         <Route path="production" element={
-          <RoleGuard permission="view_production">
+          <RoleGuard permission="factory_visibility">
             <ProductionCalendar />
           </RoleGuard>
         } />
@@ -100,7 +100,7 @@ function App() {
         } />
 
         {/* Brand Admin Routes */}
-        <Route element={<RoleGuard permission="view_dashboard" allowedRoles={['Brand Admin']} />}>
+        <Route element={<RoleGuard permission="sys_login" allowedScopes={['Brand']} />}>
           <Route path="/brand/dashboard" element={<BrandAdminDashboard />} />
         </Route>
 
@@ -108,18 +108,18 @@ function App() {
           <Route path="/payments" element={<PaymentManagement />} />
         </Route>
 
-        {/* Area Manager Routes */}
-        <Route element={<RoleGuard permission="view_dashboard" allowedRoles={['Area Manager']} />}>
+        {/* Area Manager Routes (Optional, can be skipped for custom roles if they map to Outlet, but we'll leave strict for Area Manager string for now, or just Scope) */}
+        <Route element={<RoleGuard permission="sys_login" allowedRoles={['Area Manager']} />}>
           <Route path="/area/dashboard" element={<AreaManagerDashboard />} />
         </Route>
 
-        {/* Store Manager Routes */}
-        <Route element={<RoleGuard permission="view_dashboard" allowedRoles={['Store Manager']} />}>
+        {/* Store Manager Routes (Default for Outlet scope) */}
+        <Route element={<RoleGuard permission="sys_login" allowedScopes={['Outlet']} />}>
           <Route path="/store/dashboard" element={<StoreManagerDashboard />} />
         </Route>
 
-        {/* Factory Manager Routes */}
-        <Route element={<RoleGuard permission="view_production" allowedRoles={['Factory Manager']} />}>
+        {/* Factory Routes */}
+        <Route element={<RoleGuard permission="factory_visibility" allowedScopes={['Factory']} />}>
           <Route path="/factory/dashboard" element={<FactoryDashboard />} />
         </Route>
 

@@ -7,68 +7,88 @@ import DateRangeFilter from '../components/dashboard/DateRangeFilter';
 import { dashboardService } from '../services/dashboardService';
 
 const Dashboard = () => {
-    const [dateRange, setDateRange] = useState('Today');
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
+    const [dateRange, setDateRange] = useState('This Week');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const { user } = useSelector((state) => state.auth);
 
     useEffect(() => {
         const fetchStats = async () => {
-            setLoading(true);
+            if ((dateRange === 'Custom Date' || dateRange === 'Date Range') && !customDates.startDate) return;
+
+            setIsRefreshing(true);
             try {
-                const data = await dashboardService.getDashboardStats(user.role, undefined, dateRange);
+                const apiRange = dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange;
+                const data = await dashboardService.getDashboardStats(user.role, undefined, apiRange, customDates);
                 setStats(data);
+                if (loading) setLoading(false);
             } catch (error) {
                 console.error("Failed to fetch dashboard stats:", error);
             } finally {
-                setLoading(false);
+                setIsRefreshing(false);
             }
         };
         fetchStats();
-    }, [dateRange, user.role]);
+    }, [dateRange, user.role, customDates]);
+
+    const isFiltered = dateRange !== 'Today' && dateRange !== 'All Time';
 
     const statCards = [
         {
-            title: 'Total Revenue',
-            value: `$${stats?.revenue?.toLocaleString() || '0'}`,
+            title: isFiltered ? 'Period Revenue' : 'Total Revenue',
+            value: `₹${stats?.revenue?.toLocaleString() || 0}`,
             change: '+12.5%',
             isPositive: true,
             icon: DollarSign,
-            color: 'bg-green-500'
+            color: 'bg-purple-500'
+        },
+        {
+            title: isFiltered ? 'Period Orders' : 'Total Orders',
+            value: stats?.totalOrders || 0,
+            change: '+8.2%',
+            isPositive: true,
+            icon: ShoppingBag,
+            color: 'bg-indigo-500'
         },
         {
             title: 'Active Users',
             value: stats?.usersCount?.toLocaleString() || '0',
-            change: '+3.2%',
-            isPositive: true,
+            change: '-2.1%',
+            isPositive: false,
             icon: Users,
             color: 'bg-blue-500'
         },
         {
-            title: 'Total Orders',
-            value: stats?.totalOrders?.toLocaleString() || '0',
-            change: '-2.1%',
-            isPositive: false,
-            icon: ShoppingBag,
-            color: 'bg-purple-500'
-        },
-        {
             title: 'Avg Order Value',
-            value: `$${stats?.avgOrderValue?.toFixed(2) || '0.00'}`,
+            value: `₹${stats?.avgOrderValue?.toFixed(2) || '0.00'}`,
             change: '+1.2%',
             isPositive: true,
             icon: TrendingUp,
-            color: 'bg-orange-500'
+            color: 'bg-emerald-500'
         }
     ];
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    if (loading) return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+            <div className="relative">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center animate-pulse">
+                    <Activity className="w-6 h-6 text-primary" />
+                </div>
+                <div className="absolute inset-0 rounded-2xl border-2 border-primary/20 animate-ping opacity-25" />
             </div>
-        );
-    }
+            <span className="text-sm text-neutral-400 font-medium">Loading analysis...</span>
+        </div>
+    );
 
     return (
         <div className="space-y-6 pb-10">
@@ -78,7 +98,12 @@ const Dashboard = () => {
                     <p className="text-neutral-500">Welcome back, {user?.name}. Here's what's happening {dateRange.toLowerCase()}.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <DateRangeFilter value={dateRange} onChange={setDateRange} />
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        customDates={customDates}
+                        onCustomChange={setCustomDates}
+                    />
                 </div>
             </div>
 
@@ -112,7 +137,7 @@ const Dashboard = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Revenue Trend */}
-                <Card title="Revenue Growth" extra={<TrendingUp size={20} className="text-neutral-400" />}>
+                <Card title={`Revenue Growth (${dateRange === 'Custom' ? 'Period' : dateRange === 'This Week' || dateRange === 'Week' ? '7 Days' : dateRange})`} extra={<TrendingUp size={20} className="text-neutral-400" />}>
                     <div className="h-[300px] w-full mt-4">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats?.revenueTrend || []}>
@@ -134,7 +159,7 @@ const Dashboard = () => {
                                     axisLine={false}
                                     tickLine={false}
                                     tick={{ fill: '#9ca3af', fontSize: 12 }}
-                                    tickFormatter={(value) => `$${value}`}
+                                    tickFormatter={(value) => `₹${value}`}
                                 />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}

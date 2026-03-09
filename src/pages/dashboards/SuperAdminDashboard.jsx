@@ -21,26 +21,42 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const SuperAdminDashboard = () => {
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState('Today');
+    const [dateRange, setDateRange] = useState('This Week');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [loading, setLoading] = useState(true); // Added loading state
+    const isFiltered = dateRange !== 'Today' && dateRange !== 'All Time';
     const navigate = useNavigate();
 
     useEffect(() => {
         const fetchStats = async () => {
-            setLoading(true);
+            if ((dateRange === 'Custom Date' || dateRange === 'Date Range') && !customDates.startDate) return;
+
+            setIsRefreshing(true);
             try {
-                const scope = {};
-                const data = await dashboardService.getDashboardStats('Super Admin', scope, dateRange);
+                const scope = {}; // Keep scope for Super Admin
+                const apiRange = dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange;
+                const data = await dashboardService.getDashboardStats('Super Admin', scope, apiRange, customDates); // Keep Super Admin scope
                 setStats(data);
+                if (loading) setLoading(false);
             } catch (error) {
                 console.error(error);
+                // Removed toast.error and setStoreStatus as they are not for SuperAdminDashboard
             } finally {
-                setLoading(false);
+                setIsRefreshing(false);
             }
         };
         fetchStats();
-    }, [dateRange]);
+    }, [dateRange, customDates, loading]); // Added loading to dependencies
 
     if (loading) return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
@@ -58,8 +74,8 @@ const SuperAdminDashboard = () => {
     ];
 
     const statCards = [
-        { title: `${dateRange} Orders`, value: stats?.totalOrders?.toLocaleString() || '0', icon: ShoppingBag, color: 'bg-primary-50 text-primary', trend: stats?.totalOrders > 0 ? 'Live' : null },
-        { title: `${dateRange} Revenue`, value: `$${stats?.revenue?.toLocaleString() || '0'}`, icon: DollarSign, color: 'bg-emerald-50 text-emerald-600', trend: stats?.revenue > 0 ? 'Live' : null },
+        { title: isFiltered ? "Period Orders" : "Total Orders", value: stats?.totalOrders?.toLocaleString() || '0', icon: ShoppingBag, color: 'bg-primary-50 text-primary', trend: stats?.totalOrders > 0 ? 'Live' : null },
+        { title: isFiltered ? "Period Revenue" : "Total Revenue", value: `₹${stats?.revenue?.toLocaleString() || '0'}`, icon: DollarSign, color: 'bg-emerald-50 text-emerald-600', trend: stats?.revenue > 0 ? 'Live' : null },
         { title: 'Active Stores', value: stats?.activeOutlets || '0', icon: Store, color: 'bg-violet-50 text-violet-600', sub: `${stats?.brands?.length || 0} Brands` },
         { title: 'Active Factories', value: stats?.activeFactories || '0', icon: Factory, color: 'bg-amber-50 text-amber-600', sub: stats?.slotUtilization || 'Operational' },
     ];
@@ -72,7 +88,12 @@ const SuperAdminDashboard = () => {
                     <h1 className="page-title">System Overview</h1>
                     <p className="page-subtitle">Global monitoring and operational metrics</p>
                 </div>
-                <DateRangeFilter value={dateRange} onChange={setDateRange} />
+                <DateRangeFilter
+                    value={dateRange}
+                    onChange={setDateRange}
+                    customDates={customDates}
+                    onCustomChange={setCustomDates}
+                />
             </div>
 
             {/* Quick Actions */}
@@ -161,7 +182,7 @@ const SuperAdminDashboard = () => {
 
             {/* Charts Row 2 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card title="Revenue Trend (7 Days)" className="lg:col-span-2">
+                <Card title={`Revenue Trend (${dateRange === 'Custom' ? 'Period' : dateRange === 'This Week' || dateRange === 'Week' ? '7 Days' : dateRange})`} className="lg:col-span-2">
                     <div className="h-64 w-full relative">
                         <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <AreaChart data={stats?.revenueTrend}>

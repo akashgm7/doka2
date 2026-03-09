@@ -4,27 +4,43 @@ import { Package, Clock, CheckCircle, Calendar as CalendarIcon, Activity } from 
 import Card from '../../components/ui/Card';
 import { dashboardService } from '../../services/dashboardService';
 import toast from 'react-hot-toast';
+import DateRangeFilter from '../../components/dashboard/DateRangeFilter';
 
 const FactoryDashboard = () => {
     const { user } = useSelector((state) => state.auth);
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [dateRange, setDateRange] = useState('Today');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const isFiltered = dateRange !== 'Today' && dateRange !== 'All Time';
 
     useEffect(() => {
         const fetchStats = async () => {
-            setLoading(true);
+            if ((dateRange === 'Custom Date' || dateRange === 'Date Range') && !customDates.startDate) return;
+
+            setIsRefreshing(true);
             try {
-                const data = await dashboardService.getDashboardStats('Factory Manager');
+                const apiRange = dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange;
+                const data = await dashboardService.getDashboardStats('Factory Manager', undefined, apiRange, customDates);
                 setStats(data);
+                if (loading) setLoading(false);
             } catch (error) {
                 console.error("Failed to fetch factory dashboard stats:", error);
-                toast.error("Failed to load production data");
             } finally {
-                setLoading(false);
+                setIsRefreshing(false);
             }
         };
         fetchStats();
-    }, []);
+    }, [dateRange, customDates]);
 
     if (loading) return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
@@ -47,10 +63,12 @@ const FactoryDashboard = () => {
                     <h1 className="page-title">Factory Production</h1>
                     <p className="page-subtitle">Managing: {user?.assignedFactory || 'Central Kitchen'}</p>
                 </div>
-                <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 rounded-xl text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200/50">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    System Healthy
-                </div>
+                <DateRangeFilter
+                    value={dateRange}
+                    onChange={setDateRange}
+                    customDates={customDates}
+                    onCustomChange={setCustomDates}
+                />
             </div>
 
             {/* Stat Cards */}

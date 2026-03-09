@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { MapPin, ShoppingBag, DollarSign, Users, TrendingUp, Activity } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import { dashboardService } from '../../services/dashboardService';
+import DateRangeFilter from '../../components/dashboard/DateRangeFilter';
 
 const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
@@ -19,24 +20,39 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const AreaManagerDashboard = () => {
     const { user } = useSelector((state) => state.auth);
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState('Week');
+    const [dateRange, setDateRange] = useState('This Week');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const isFiltered = dateRange !== 'Today' && dateRange !== 'All Time' && dateRange !== 'Week' && dateRange !== 'This Week';
 
     useEffect(() => {
         const fetchStats = async () => {
-            setLoading(true);
+            if ((dateRange === 'Custom Date' || dateRange === 'Date Range') && !customDates.startDate) return;
+
+            setIsRefreshing(true);
             try {
-                const data = await dashboardService.getDashboardStats('Area Manager', undefined, dateRange);
+                const apiRange = dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange;
+                const data = await dashboardService.getDashboardStats('Area Manager', undefined, apiRange, customDates);
                 setStats(data);
+                if (loading) setLoading(false);
             } catch (error) {
                 console.error("Failed to fetch area dashboard stats:", error);
             } finally {
-                setLoading(false);
+                setIsRefreshing(false);
             }
         };
         fetchStats();
-    }, [dateRange]);
+    }, [dateRange, customDates]);
 
     if (loading) return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
@@ -47,8 +63,22 @@ const AreaManagerDashboard = () => {
 
     const statCards = [
         { title: 'Assigned Outlets', value: stats?.activeOutlets || user?.assignedOutlets?.length || 0, icon: MapPin, color: 'bg-primary-50 text-primary' },
-        { title: 'Area Revenue', value: `$${stats?.revenue?.toLocaleString() || '0'}`, icon: DollarSign, color: 'bg-emerald-50 text-emerald-600' },
-        { title: 'Area Orders', value: stats?.totalOrders || 0, icon: ShoppingBag, color: 'bg-violet-50 text-violet-600' },
+        {
+            title: isFiltered ? 'Period Revenue' : `${dateRange} Revenue`,
+            value: `₹${stats?.revenue?.toLocaleString() || 0}`,
+            change: '+12.5%',
+            isPositive: true,
+            icon: DollarSign,
+            color: 'bg-emerald-50 text-emerald-600'
+        },
+        {
+            title: isFiltered ? 'Period Orders' : `${dateRange} Orders`,
+            value: stats?.totalOrders || 0,
+            change: '+8.2%',
+            isPositive: true,
+            icon: ShoppingBag,
+            color: 'bg-violet-50 text-violet-600'
+        },
         { title: 'Team Members', value: stats?.usersCount || 0, icon: Users, color: 'bg-amber-50 text-amber-600' },
     ];
 
@@ -59,15 +89,12 @@ const AreaManagerDashboard = () => {
                     <h1 className="page-title">Area Performance</h1>
                     <p className="page-subtitle">Overview for your assigned outlets</p>
                 </div>
-                <select
+                <DateRangeFilter
                     value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
-                    className="bg-white border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 shadow-soft cursor-pointer"
-                >
-                    <option value="Today">Today</option>
-                    <option value="Week">This Week</option>
-                    <option value="Month">This Month</option>
-                </select>
+                    onChange={setDateRange}
+                    customDates={customDates}
+                    onCustomChange={setCustomDates}
+                />
             </div>
 
             {/* Stat Cards */}
@@ -89,7 +116,7 @@ const AreaManagerDashboard = () => {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card title="Area Revenue Trend">
+                <Card title={`Area Revenue Trend (${dateRange === 'Custom' ? 'Period' : dateRange === 'This Week' || dateRange === 'Week' ? '7 Days' : dateRange})`}>
                     <div className="h-72 w-full mt-2">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats?.revenueTrend || []}>
@@ -147,7 +174,7 @@ const AreaManagerDashboard = () => {
                                             {outlet.status}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3.5 font-bold text-neutral-800">${outlet.revenue?.toLocaleString() || '0'}</td>
+                                    <td className="px-4 py-3.5 font-bold text-neutral-800">₹{outlet.revenue?.toLocaleString() || '0'}</td>
                                     <td className="px-4 py-3.5 text-neutral-600 font-medium">{outlet.orders || 0}</td>
                                     <td className="px-4 py-3.5">
                                         <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-xs">

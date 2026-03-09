@@ -17,6 +17,11 @@ const productSchema = new mongoose.Schema({
     numReviews: { type: Number, required: true, default: 0 },
     countInStock: { type: Number, required: true, default: 0 },
     sku: { type: String, unique: true },
+    dietary: {
+        type: String,
+        enum: ['Egg', 'Eggless', 'N/A'],
+        default: 'Eggless'
+    },
 
     // Admin Specific Fields
     variants: [{
@@ -30,8 +35,11 @@ const productSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true }
 }, {
     timestamps: true,
-    collection: 'cakes' // Point to the same collection as the store
+    collection: 'products' // Point to the same collection as the store
 });
+
+const auditPlugin = require('../plugins/auditPlugin');
+productSchema.plugin(auditPlugin);
 
 const Product = dokaConnection.model('Product', productSchema);
 

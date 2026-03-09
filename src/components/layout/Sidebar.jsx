@@ -38,27 +38,27 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         setIsLogoutModalOpen(false);
     };
 
-    const getDashboardPath = (role) => {
-        switch (role) {
-            case 'Super Admin': return '/super-admin/dashboard';
-            case 'Brand Admin': return '/brand/dashboard';
-            case 'Area Manager': return '/area/dashboard';
-            case 'Store Manager': return '/store/dashboard';
-            case 'Factory Manager': return '/factory/dashboard';
+    const getDashboardPath = (role, scopeLevel) => {
+        if (role === 'Area Manager') return '/area/dashboard'; // Keep explicit mapping for Area Manager if needed
+        switch (scopeLevel) {
+            case 'System': return '/super-admin/dashboard';
+            case 'Brand': return '/brand/dashboard';
+            case 'Outlet': return '/store/dashboard';
+            case 'Factory': return '/factory/dashboard';
             default: return '/dashboard';
         }
     };
 
     const allMenuItems = [
-        { title: 'Dashboard', path: getDashboardPath(role), icon: LayoutDashboard, permission: 'view_dashboard' },
+        { title: 'Dashboard', path: getDashboardPath(user?.role, user?.scopeLevel), icon: LayoutDashboard, permission: 'sys_login' },
         { title: 'Location Management', path: '/locations', icon: MapPin, permission: 'manage_locations' },
         { title: 'Roles & Permissions', path: '/roles', icon: Shield, permission: 'manage_roles' },
-        { title: 'Loyalty Program', path: '/loyalty', icon: Gift, permission: 'manage_users' },
+        { title: 'Loyalty Program', path: '/loyalty', icon: Gift, permission: 'loyalty_view' },
         { title: 'Notifications', path: '/notifications', icon: Bell, permission: 'notifications_manual' },
         { title: 'Menu Management', path: '/menu', icon: ClipboardList, permission: 'view_menu' },
         { title: 'User Management', path: '/users', icon: Users, permission: 'manage_users' },
         { title: 'Orders', path: '/orders', icon: ShoppingBag, permission: 'view_orders' },
-        { title: 'Production', path: '/production', icon: Factory, permission: 'view_production' },
+        { title: 'Production', path: '/production', icon: Factory, permission: 'factory_visibility' },
         { title: 'Payment History', path: '/payments', icon: CreditCard, permission: 'view_payments' },
         { title: 'Reports', path: '/reports', icon: PieChart, permission: 'view_reports' },
         { title: 'Audit Logs', path: '/audit-logs', icon: FileText, permission: 'view_audit_logs' },
@@ -67,7 +67,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
     const filteredItems = allMenuItems.filter(item => {
         if (!user) return false;
-        if (user.role === 'Super Admin') return true;
+        if (user.scopeLevel === 'System' || user.role === 'Super Admin') return true;
         const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
         if (item.title === 'Dashboard') return true;
         if (item.permission && userPerms.includes(item.permission)) return true;

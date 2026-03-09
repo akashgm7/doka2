@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { adminConnection } = require('../config/db');
+const { dokaConnection } = require('../config/db');
 
 const auditLogSchema = new mongoose.Schema({
     user: { type: String, required: true },
@@ -17,6 +17,6 @@ const auditLogSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const AuditLog = adminConnection.model('AuditLog', auditLogSchema);
+const AuditLog = dokaConnection.model('AuditLog', auditLogSchema);
 
 module.exports = AuditLog;

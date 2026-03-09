@@ -4,7 +4,7 @@ export const ROLES = {
     AREA_MANAGER: 'Area Manager',
     STORE_MANAGER: 'Store Manager',
     FACTORY_MANAGER: 'Factory Manager',
-    STORE_USER: 'Store User',
+    STORE_USER: 'Customers',
 };
 
 const HIERARCHY = {

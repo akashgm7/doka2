@@ -1,11 +1,14 @@
 import api from '../utils/axiosConfig';
 
 export const dashboardService = {
-    async getDashboardStats(role, scope, dateRange = 'Today') {
+    async getDashboardStats(role, scope, dateRange = 'Today', customDates = {}) {
         try {
-            const response = await api.get('/dashboard/stats', {
-                params: { range: dateRange }
-            });
+            const params = { range: dateRange };
+            if (dateRange === 'Custom') {
+                params.startDate = customDates.startDate;
+                params.endDate = customDates.endDate;
+            }
+            const response = await api.get('/dashboard/stats', { params });
             return response.data;
         } catch (error) {
             console.error("Failed to fetch dashboard stats", error);

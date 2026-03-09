@@ -6,35 +6,75 @@ const User = require('../models/User');
 // @route   GET /api/dashboard/stats
 // @access  Private
 const getDashboardStats = async (req, res) => {
-    const { role, assignedBrand, assignedFactory, assignedOutlets } = req.user;
-    const { range } = req.query;
-    console.log(`[Dashboard API] Role: ${role}, Brand: ${assignedBrand}, Range: "${range}"`);
+    const { scopeLevel, role, assignedBrand, assignedFactory, assignedOutlets } = req.user;
+    const { range, startDate: qStart, endDate: qEnd } = req.query;
+    console.log(`[Dashboard API] Role: ${role}, Range: "${range}", qStart: "${qStart}", qEnd: "${qEnd}"`);
 
-    // Date Filtering Logic
-    let startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
+    // IST Date Boundary Helper (IST is UTC +5:30)
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const getISTStartOfDay = (d) => {
+        const istDate = new Date(d.getTime() + IST_OFFSET);
+        istDate.setUTCHours(0, 0, 0, 0);
+        return new Date(istDate.getTime() - IST_OFFSET);
+    };
+
+    const getISTEndOfDay = (d) => {
+        const istDate = new Date(d.getTime() + IST_OFFSET);
+        istDate.setUTCHours(23, 59, 59, 999);
+        return new Date(istDate.getTime() - IST_OFFSET);
+    };
+
+    let startDate = getISTStartOfDay(new Date());
     let endDate = null;
 
-    if (range === 'Today') {
-        // Keeps startDate at 00:00:00 today, endDate open
+    if (range === 'Custom' && qStart) {
+        // qStart is expected as YYYY-MM-DD
+        const [y, m, d] = qStart.split('-').map(Number);
+        const startDt = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+        // This UTC date represents 00:00 UTC on that day. 
+        // We want 00:00 IST on that day.
+        startDate = new Date(startDt.getTime() - IST_OFFSET);
+
+        if (qEnd) {
+            const [ey, em, ed] = qEnd.split('-').map(Number);
+            const endDt = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999));
+            endDate = new Date(endDt.getTime() - IST_OFFSET);
+        } else {
+            endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+        }
+    } else if (range === 'Today') {
+        // Already set to IST start of today
+        endDate = getISTEndOfDay(new Date());
     } else if (range === 'Yesterday') {
-        startDate.setDate(startDate.getDate() - 1);
-        endDate = new Date(startDate);
-        endDate.setHours(23, 59, 59, 999);
+        const yesterday = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+        startDate = getISTStartOfDay(yesterday);
+        endDate = getISTEndOfDay(yesterday);
     } else if (range === 'This Week' || range === 'Week') {
-        startDate.setDate(startDate.getDate() - 7);
+        // Last 7 days in IST
+        startDate = new Date(getISTStartOfDay(new Date()).getTime() - 7 * 24 * 60 * 60 * 1000);
+        endDate = getISTEndOfDay(new Date());
     } else if (range === 'This Month' || range === 'Month') {
-        startDate.setDate(1);
+        const now = new Date(new Date().getTime() + IST_OFFSET);
+        const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        startDate = new Date(monthStart.getTime() - IST_OFFSET);
+        endDate = getISTEndOfDay(new Date());
     } else if (range === 'Last Month') {
-        startDate.setMonth(startDate.getMonth() - 1);
-        startDate.setDate(1);
-        endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + 1);
-        endDate.setDate(0);
-        endDate.setHours(23, 59, 59, 999);
+        const now = new Date(Date.now() + IST_OFFSET);
+        const firstOfThis = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const lastOfLast = new Date(firstOfThis.getTime() - 1);
+        const firstOfLast = new Date(Date.UTC(lastOfLast.getUTCFullYear(), lastOfLast.getUTCMonth(), 1));
+        startDate = new Date(firstOfLast.getTime() - IST_OFFSET);
+        const lastOfLastIST = new Date(lastOfLast.getTime() + IST_OFFSET);
+        lastOfLastIST.setUTCHours(23, 59, 59, 999);
+        endDate = new Date(lastOfLastIST.getTime() - IST_OFFSET);
     } else if (range === 'This Year' || range === 'Year') {
-        startDate.setMonth(0, 1);
+        const now = new Date(Date.now() + IST_OFFSET);
+        const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+        startDate = new Date(yearStart.getTime() - IST_OFFSET);
+        endDate = getISTEndOfDay(new Date());
     }
+
+    console.log(`[Dashboard API] Resolved Boundaries (UTC for Query): start=${startDate.toISOString()}, end=${endDate ? endDate.toISOString() : 'OPEN'}`);
 
     let baseQuery = {};
     if (range !== 'All Time') {
@@ -44,10 +84,10 @@ const getDashboardStats = async (req, res) => {
         }
     }
 
-    // Role Scope
-    if (role === 'Brand Admin') {
+    // Scope-level filtering
+    if (scopeLevel === 'Brand') {
         baseQuery.brandId = assignedBrand;
-    } else if (role === 'Store User' || role === 'Store Manager' || role === 'Area Manager') {
+    } else if (scopeLevel === 'Outlet') {
         if (assignedOutlets && assignedOutlets.length > 0) {
             // Resolve by name
             const storesByName = await Store.find({ name: { $in: assignedOutlets } }).select('_id');
@@ -62,7 +102,7 @@ const getDashboardStats = async (req, res) => {
 
             // Combine all possible matching values
             const allPossible = [...new Set([...assignedOutlets, ...nameBasedIds, ...idBasedIds, ...idBasedNames])];
-            console.log(`[Dashboard-Base] ${role} allPossible storeIds:`, allPossible);
+            console.log(`[Dashboard-Base] Outlet Scope allPossible storeIds:`, allPossible);
 
             // Use $or: match orders with a storeId in the list, OR orders with no storeId
             const brandId = assignedBrand || 'brand-001';
@@ -74,6 +114,11 @@ const getDashboardStats = async (req, res) => {
         } else {
             baseQuery._id = null; // No outlets → no orders
         }
+    } else if (scopeLevel === 'Factory') {
+        baseQuery.isMMC = true;
+        if (assignedFactory) baseQuery.storeId = assignedFactory;
+    } else if (scopeLevel === 'None') {
+        baseQuery._id = null;
     }
 
     try {
@@ -108,10 +153,10 @@ const getDashboardStats = async (req, res) => {
         // Avg Order Value
         const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-        // Today's Stats for Comparison
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const todayQuery = { ...baseQuery, createdAt: { $gte: startOfToday } };
+        // For comparison, we use today's stats for the same scope
+        const startOfToday = getISTStartOfDay(new Date());
+        const endOfToday = getISTEndOfDay(new Date());
+        const todayQuery = { ...baseQuery, createdAt: { $gte: startOfToday, $lte: endOfToday } };
 
         const todayOrders = await Order.countDocuments(todayQuery);
         const todayRevenueAgg = await Order.aggregate([
@@ -120,11 +165,11 @@ const getDashboardStats = async (req, res) => {
         ]);
         const todayRevenue = todayRevenueAgg.length > 0 ? todayRevenueAgg[0].total : 0;
 
-        // Status Counts
-        const pendingOrders = await Order.countDocuments({ ...baseQuery, status: 'Pending' });
-        const preparingOrders = await Order.countDocuments({ ...baseQuery, status: 'Preparing' });
-        const readyOrders = await Order.countDocuments({ ...baseQuery, status: 'Ready' });
-        const completedOrders = await Order.countDocuments({ ...baseQuery, status: 'Delivered' });
+        // Status Counts (Matching Order model enums)
+        const pendingOrders = await Order.countDocuments({ ...baseQuery, status: { $in: ['PENDING', 'Pending'] } });
+        const preparingOrders = await Order.countDocuments({ ...baseQuery, status: { $in: ['CONFIRMED', 'IN_PRODUCTION', 'Preparing'] } });
+        const readyOrders = await Order.countDocuments({ ...baseQuery, status: { $in: ['READY', 'Ready'] } });
+        const completedOrders = await Order.countDocuments({ ...baseQuery, status: { $in: ['DELIVERED', 'Delivered'] } });
 
         const orderBreakdown = {
             pending: pendingOrders,
@@ -173,7 +218,7 @@ const getDashboardStats = async (req, res) => {
             }
         } else if (role === 'Store Manager') {
             // Store Managers look after Store Users (Staff) in their outlets
-            userQuery.role = 'Store User';
+            userQuery.role = 'Customers';
             if (allAssignedIds.length > 0) {
                 userQuery.assignedOutlets = { $in: allAssignedIds };
             }
@@ -218,10 +263,10 @@ const getDashboardStats = async (req, res) => {
             value: item.count
         }));
 
-        // Charts: Revenue Trend (Last 7 Days including today)
+        // Charts: Revenue Trend
         // Use +05:30 timezone for UTC to IST conversion in aggregation to match local view
         const revenueTrendAgg = await Order.aggregate([
-            { $match: { ...baseQuery, createdAt: { $gte: new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000) } } },
+            { $match: baseQuery },
             {
                 $group: {
                     _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "+05:30" } },
@@ -240,9 +285,19 @@ const getDashboardStats = async (req, res) => {
         };
 
         const revenueTrend = [];
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(startOfToday.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
-            const dateStr = getLocalDateStr(d);
+        const actualEndDate = endDate || new Date();
+        const diffTime = Math.abs(actualEndDate.getTime() - startDate.getTime());
+        let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 31) diffDays = 31;
+
+        for (let i = 0; i <= diffDays; i++) {
+            const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+            if (d > actualEndDate) break;
+
+            const istDate = new Date(d.getTime() + IST_OFFSET);
+            const dateStr = istDate.toISOString().split('T')[0]; // YYYY-MM-DD in IST
+
             const found = revenueTrendAgg.find(item => item._id === dateStr);
             revenueTrend.push({
                 name: dateStr.slice(5), // MM-DD
@@ -289,10 +344,13 @@ const getDashboardStats = async (req, res) => {
                 status: { $in: ['Pending', 'Preparing'] }
             });
 
-            // Next 7 days production planning
-            for (let i = 0; i < 7; i++) {
-                const date = new Date(startOfToday);
+            // Dynamic production planning based on range
+            const calendarDays = diffDays > 0 ? diffDays : 7;
+            for (let i = 0; i <= calendarDays; i++) {
+                const date = new Date(startDate);
                 date.setDate(date.getDate() + i);
+                if (date > actualEndDate && range !== 'Today') break;
+
                 const dateStr = date.toISOString().split('T')[0];
                 const count = await Order.countDocuments({
                     ...baseQuery,
@@ -304,6 +362,7 @@ const getDashboardStats = async (req, res) => {
                     orders: count,
                     status: count > 5 ? 'Full' : 'Available'
                 });
+                if (calendar.length >= 10) break; // Limit calendar view
             }
         }
 
@@ -314,6 +373,13 @@ const getDashboardStats = async (req, res) => {
         const successRate = meaningfulOrders > 0 ? Math.round((deliveredCount / meaningfulOrders) * 100) : 100;
 
         res.json({
+            meta: {
+                range,
+                qStart,
+                qEnd,
+                resolvedStart: startDate.toISOString(),
+                resolvedEnd: endDate ? endDate.toISOString() : 'OPEN'
+            },
             revenue: totalRevenue,
             totalOrders: totalOrders,
             orders: totalOrders,

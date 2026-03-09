@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setGlobalSearch } from '../../features/ui/uiSlice';
 import { brandService } from '../../services/brandService';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -46,7 +45,7 @@ const LocationManagement = () => {
     const [locations, setLocations] = useState([]);
     const [brands, setBrands] = useState([]);
     const [loading, setLoading] = useState(true);
-    const searchTerm = useSelector(state => state.ui?.globalSearch || '');
+    const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLoc, setEditingLoc] = useState(null);
@@ -315,7 +314,7 @@ const LocationManagement = () => {
                             placeholder="Search locations..."
                             className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
                             value={searchTerm}
-                            onChange={(e) => dispatch(setGlobalSearch(e.target.value))}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>

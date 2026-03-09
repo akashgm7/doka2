@@ -11,22 +11,14 @@ const notificationSchema = new mongoose.Schema({
         required: true
     },
     target: {
-        type: String,
+        type: [String],
         required: true,
-        enum: [
-            'All Users',
-            'Staff',
-            'Customers',
-            'Brand Admins',
-            'Brand Users',
-            'Brand Staff',
-            'Brand Customers',
-            'Area Staff',
-            'Area Manager',
-            'Store Manager',
-            'Factory Manager',
-            'Store Staff'
-        ]
+        validate: {
+            validator: function (v) {
+                return v && v.length > 0;
+            },
+            message: 'At least one target audience must be selected'
+        }
     },
     type: {
         type: String,

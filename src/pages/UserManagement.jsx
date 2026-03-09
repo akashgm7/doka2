@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setGlobalSearch } from '../features/ui/uiSlice';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -13,7 +12,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 
 const UserManagement = () => {
     const { user: currentUser } = useSelector((state) => state.auth);
-    const searchTerm = useSelector(state => state.ui?.globalSearch || '');
+    const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -96,7 +95,9 @@ const UserManagement = () => {
     const filteredUsers = users.filter(user => {
         const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.email.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesRole = roleFilter === 'All' || user.role === roleFilter;
+        const matchesRole = roleFilter === 'All' ||
+            user.role === roleFilter ||
+            (roleFilter === 'Customers' && user.role === 'Store User');
         return matchesSearch && matchesRole;
     });
 
@@ -117,16 +118,19 @@ const UserManagement = () => {
         },
         {
             header: 'Role',
-            render: (user) => <Badge variant="primary" dot>{user.role}</Badge>
+            render: (user) => <Badge variant="primary" dot>{user.role === 'Store User' ? 'Customers' : user.role}</Badge>
         },
         {
             header: 'Status',
             render: (user) => <Badge variant={user.status === 'Active' ? 'success' : 'neutral'} dot>{user.status}</Badge>
         },
         {
-            header: 'Loyalty',
+            header: 'Modified',
             render: (user) => (
-                <span className="text-sm font-semibold text-primary">{user.loyaltyPoints ?? 0}</span>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold text-neutral-600">{user.modifiedBy || 'System'}</span>
+                    <span className="text-[10px] text-neutral-400">{user.modifiedDate ? new Date(user.modifiedDate).toLocaleDateString() : 'N/A'}</span>
+                </div>
             )
         },
         {
@@ -211,7 +215,7 @@ const UserManagement = () => {
                             placeholder="Search by name or email..."
                             className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary hover:border-neutral-300 transition-all"
                             value={searchTerm}
-                            onChange={(e) => dispatch(setGlobalSearch(e.target.value))}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                     <select

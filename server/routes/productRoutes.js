@@ -11,11 +11,11 @@ const { protect, hasPermission } = require('../middleware/authMiddleware');
 
 router.route('/')
     .get(protect, getProducts)
-    .post(protect, hasPermission('manage_menu'), createProduct);
+    .post(protect, hasPermission('manage_master_menu'), createProduct);
 
 router.route('/:id')
     .get(protect, getProductById)
-    .put(protect, hasPermission('manage_menu'), updateProduct)
-    .delete(protect, hasPermission('manage_menu'), deleteProduct);
+    .put(protect, hasPermission('manage_master_menu'), updateProduct)
+    .delete(protect, hasPermission('manage_master_menu'), deleteProduct);
 
 module.exports = router;

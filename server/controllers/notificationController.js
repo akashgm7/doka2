@@ -2,22 +2,30 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 
 // Helper: resolve which DB roles map to a target value for recipient counting
-const getRoleQueryForTarget = (target, senderUser) => {
-    switch (target) {
-        case 'All Users': return {};
-        case 'Staff': return { role: { $nin: ['Customer'] } };
-        case 'Customers': return { role: 'Customer' };
-        case 'Brand Admins': return { role: 'Brand Admin' };
-        case 'Brand Users': return { assignedBrand: senderUser.assignedBrand };
-        case 'Brand Staff': return { role: { $nin: ['Customer'] }, assignedBrand: senderUser.assignedBrand };
-        case 'Brand Customers': return { role: 'Customer', assignedBrand: senderUser.assignedBrand };
-        case 'Area Staff': return { role: { $in: ['Area Manager', 'Store Manager', 'Store User'] }, assignedBrand: senderUser.assignedBrand };
-        case 'Area Manager': return { role: 'Area Manager' };
-        case 'Store Manager': return { role: 'Store Manager' };
-        case 'Store Staff': return { role: { $in: ['Store Manager', 'Store User'] }, assignedOutlets: { $in: senderUser.assignedOutlets || [] } };
-        case 'Factory Manager': return { role: 'Factory Manager' };
-        default: return null;
-    }
+const getRoleQueryForTargets = (targets, senderUser) => {
+    if (!Array.isArray(targets) || targets.length === 0) return null;
+
+    const queries = targets.map(target => {
+        switch (target) {
+            case 'All Users': return {};
+            case 'Staff': return { role: { $nin: ['Customer'] } };
+            case 'Customers': return { role: 'Customer' };
+            case 'Brand Admins': return { role: 'Brand Admin' };
+            case 'Brand Users': return { assignedBrand: senderUser.assignedBrand };
+            case 'Brand Staff': return { role: { $nin: ['Customer'] }, assignedBrand: senderUser.assignedBrand };
+            case 'Brand Customers': return { role: 'Customer', assignedBrand: senderUser.assignedBrand };
+            case 'Area Staff': return { role: { $in: ['Area Manager', 'Store Manager', 'Customers'] }, assignedBrand: senderUser.assignedBrand };
+            case 'Area Manager': return { role: 'Area Manager' };
+            case 'Store Manager': return { role: 'Store Manager' };
+            case 'Store Staff': return { role: { $in: ['Store Manager', 'Customers'] }, assignedOutlets: { $in: senderUser.assignedOutlets || [] } };
+            case 'Factory Manager': return { role: 'Factory Manager' };
+            default: return null;
+        }
+    }).filter(q => q !== null);
+
+    if (queries.length === 0) return null;
+    if (queries.length === 1) return queries[0];
+    return { $or: queries };
 };
 
 // @desc    Send bulk notification
@@ -40,7 +48,7 @@ const createBulkNotification = async (req, res) => {
 
         // Count how many users this notification was sent to
         let recipientCount = 0;
-        const roleQuery = getRoleQueryForTarget(target, req.user);
+        const roleQuery = getRoleQueryForTargets(target, req.user);
         if (roleQuery !== null) {
             recipientCount = await User.countDocuments(roleQuery);
         }
@@ -56,25 +64,18 @@ const createBulkNotification = async (req, res) => {
 // @access  Private (scoped by role)
 const getNotificationHistory = async (req, res) => {
     try {
-        const { role, _id: userId, assignedBrand } = req.user;
+        const { scopeLevel, role, _id: userId, assignedBrand } = req.user;
         let query = { type: 'Manual' };
 
-        if (role === 'Super Admin') {
-            // Super Admin sees everything
-        } else if (role === 'Brand Admin') {
-            // Brand Admin only sees notifications for their brand
+        if (scopeLevel === 'System') {
+            // System sees everything
+        } else if (scopeLevel === 'Brand') {
+            // Brand level only sees notifications for their brand
             query.brandId = assignedBrand;
-        } else if (role === 'Area Manager') {
-            // Area Manager sees notifications sent to Area Manager or Area Staff targets
-            // AND only from their own brand scope
+        } else if (scopeLevel === 'Outlet') {
+            // Outlet staff sees notifications sent to their role or staff globally
             query.$and = [
-                { target: { $in: ['Area Manager', 'Area Staff', 'Staff'] } },
-                { $or: [{ brandId: assignedBrand }, { brandId: null }] }
-            ];
-        } else if (role === 'Store Manager') {
-            // Store Manager sees notifications targeted at their role or their staff
-            query.$and = [
-                { target: { $in: ['Store Manager', 'Store Staff', 'Staff'] } },
+                { target: { $in: [role, 'Area Manager', 'Store Manager', 'Area Staff', 'Store Staff', 'Staff'] } },
                 { $or: [{ brandId: assignedBrand }, { brandId: null }] },
                 {
                     $or: [
@@ -83,13 +84,13 @@ const getNotificationHistory = async (req, res) => {
                     ]
                 }
             ];
-        } else if (role === 'Factory Manager') {
+        } else if (scopeLevel === 'Factory') {
             query.$and = [
-                { target: { $in: ['Factory Manager', 'Staff'] } },
+                { target: { $in: [role, 'Factory Manager', 'Staff'] } },
                 { $or: [{ brandId: assignedBrand }, { brandId: null }] }
             ];
         } else {
-            // No other roles have access to history
+            // No other scopes have access to history
             return res.status(403).json({ message: 'Not authorized to view notification history' });
         }
 
@@ -108,31 +109,24 @@ const getNotificationHistory = async (req, res) => {
 // @access  Private
 const getMyNotifications = async (req, res) => {
     try {
-        const { role, assignedBrand } = req.user;
+        const { scopeLevel, role, assignedBrand } = req.user;
 
-        // Determine which target groups this role belongs to.
-        // 'All Users' is ONLY for notifications that truly target everyone (staff + customers).
-        // Customer role uses the /public endpoint for their feed — NOT this one.
+        // Determine which target groups this scope belongs to.
         let targetGroups = ['All Users'];
 
-        if (role === 'Super Admin') {
+        if (scopeLevel === 'System') {
             targetGroups.push('Staff', 'Brand Admins');
-        } else if (role === 'Brand Admin') {
-            targetGroups.push('Staff', 'Brand Admins', 'Brand Users', 'Brand Staff');
-        } else if (role === 'Area Manager') {
-            targetGroups.push('Staff', 'Area Staff', 'Area Manager');
-        } else if (role === 'Store Manager') {
-            targetGroups.push('Staff', 'Store Staff', 'Area Staff', 'Store Manager');
-        } else if (role === 'Factory Manager') {
-            targetGroups.push('Staff', 'Factory Manager');
+        } else if (scopeLevel === 'Brand') {
+            targetGroups.push('Staff', 'Brand Admins', 'Brand Users', 'Brand Staff', role);
+        } else if (scopeLevel === 'Outlet') {
+            targetGroups.push('Staff', 'Store Staff', 'Area Staff', 'Store Manager', 'Area Manager', role);
+        } else if (scopeLevel === 'Factory') {
+            targetGroups.push('Staff', 'Factory Manager', role);
         } else if (role === 'Customer') {
             // Customers should use the /public endpoint.
-            // If they somehow hit this endpoint while authenticated,
-            // only show notifications targeted to them.
             targetGroups = ['All Users', 'Customers'];
         } else {
-            // Store User, other internal roles
-            targetGroups.push('Staff');
+            targetGroups.push('Staff', role);
         }
 
         let query = {
@@ -147,8 +141,8 @@ const getMyNotifications = async (req, res) => {
             ];
         }
 
-        // Store Managers only see notifications that are store-agnostic OR meant for their specific stores
-        if (role === 'Store Manager') {
+        // Outlet scope only sees notifications that are store-agnostic OR meant for their specific stores
+        if (scopeLevel === 'Outlet') {
             query.$and = [
                 {
                     $or: [

@@ -22,27 +22,43 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const StoreManagerDashboard = () => {
     const { user } = useSelector((state) => state.auth);
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [storeStatus, setStoreStatus] = useState('Closed');
     const [statusLoading, setStatusLoading] = useState(false);
     const [dateRange, setDateRange] = useState('Today');
+    const [customDates, setCustomDates] = useState({
+        startDate: getTodayStr(),
+        endDate: getTodayStr()
+    });
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const isFiltered = dateRange !== 'Today' && dateRange !== 'All Time';
 
     useEffect(() => {
         const fetchStats = async () => {
-            setLoading(true);
+            if ((dateRange === 'Custom Date' || dateRange === 'Date Range') && !customDates.startDate) return;
+
+            setIsRefreshing(true);
             try {
-                const data = await dashboardService.getDashboardStats('Store Manager', undefined, dateRange);
+                const apiRange = dateRange === 'Custom Date' || dateRange === 'Date Range' ? 'Custom' : dateRange;
+                const data = await dashboardService.getDashboardStats('Store Manager', undefined, apiRange, customDates);
                 setStats(data);
                 setStoreStatus(data.status || 'Open');
+                if (loading) setLoading(false);
             } catch (error) {
                 console.error("Failed to fetch store dashboard stats:", error);
+                toast.error("Failed to load dashboard data");
             } finally {
-                setLoading(false);
+                setIsRefreshing(false);
             }
         };
         fetchStats();
-    }, [dateRange]);
+    }, [dateRange, customDates]);
 
     const handleToggleStatus = async () => {
         setStatusLoading(true);
@@ -85,7 +101,12 @@ const StoreManagerDashboard = () => {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <DateRangeFilter value={dateRange} onChange={setDateRange} />
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        customDates={customDates}
+                        onCustomChange={setCustomDates}
+                    />
                     <div className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold ring-1 ${storeStatus === 'Open' ? 'bg-emerald-50 ring-emerald-200 text-emerald-700' : 'bg-red-50 ring-red-200 text-red-700'}`}>
                         <span className={`w-2 h-2 rounded-full ${storeStatus === 'Open' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
                         {storeStatus}
@@ -114,9 +135,9 @@ const StoreManagerDashboard = () => {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                         {[
-                            { label: 'Revenue', value: `$${stats?.revenue?.toLocaleString() || '0'}`, icon: TrendingUp },
+                            { label: 'Revenue', value: `₹${stats?.revenue?.toLocaleString() || '0'}`, icon: TrendingUp },
                             { label: 'Orders', value: stats?.totalOrders || 0, icon: ShoppingBag },
-                            { label: 'Avg Order', value: `$${stats?.avgOrderValue?.toFixed(0) || '0'}`, icon: BarChart2 },
+                            { label: 'Avg Order', value: `₹${stats?.avgOrderValue?.toFixed(0) || '0'}`, icon: BarChart2 },
                         ].map((item) => (
                             <div key={item.label} className="flex items-center gap-4">
                                 <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
@@ -147,7 +168,7 @@ const StoreManagerDashboard = () => {
 
             {/* Chart + Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-2" title="Weekly Sales Trend">
+                <Card className="lg:col-span-2" title={`Sales Trend (${dateRange === 'Custom' ? 'Period' : dateRange === 'This Week' || dateRange === 'Week' ? '7 Days' : dateRange})`}>
                     <div className="h-72 w-full mt-2">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats?.revenueTrend || []}>
@@ -206,7 +227,7 @@ const StoreManagerDashboard = () => {
                                 <tr key={order.orderNumber || order.id} className="hover:bg-primary-50/20 transition-colors">
                                     <td className="px-4 py-3 font-semibold text-neutral-800">#{order.orderNumber || order.id?.slice(-6)}</td>
                                     <td className="px-4 py-3 text-neutral-600">{order.customerName || order.customer}</td>
-                                    <td className="px-4 py-3 font-semibold text-neutral-800">${order.totalAmount || order.total}</td>
+                                    <td className="px-4 py-3 font-semibold text-neutral-800">₹{order.totalAmount || order.total}</td>
                                     <td className="px-4 py-3">
                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1 ${order.status === 'Pending' ? 'bg-amber-50 text-amber-700 ring-amber-200/50' :
                                             order.status === 'Preparing' ? 'bg-blue-50 text-blue-700 ring-blue-200/50' :

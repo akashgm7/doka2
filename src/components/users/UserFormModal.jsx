@@ -106,6 +106,10 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
     const availableOutlets = locations.filter(l => l.type === 'Outlet');
     const availableFactories = locations.filter(l => l.type === 'Factory');
 
+    // Determine the selected role's scope level
+    const selectedRoleObj = roles.find(r => r.name === formData.role);
+    const roleScopeLevel = selectedRoleObj ? selectedRoleObj.scopeLevel : 'None';
+
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -160,9 +164,9 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
                                 </select>
                             </div>
 
-                            {/* Location Assignment based on Role */}
-                            {/* Outlets: For Store Managers, Area Managers */}
-                            {['Store Manager', 'Area Manager'].includes(formData.role) && (
+                            {/* Location Assignment based on Role Scope */}
+                            {/* Outlets: For scopes defined as Outlet */}
+                            {roleScopeLevel === 'Outlet' && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Assign Outlets</label>
                                     <div className="mt-1 border border-gray-300 rounded-md max-h-32 overflow-y-auto p-2 space-y-1">
@@ -190,8 +194,8 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
                                 </div>
                             )}
 
-                            {/* Factory: For Factory Users */}
-                            {formData.role === 'Factory Manager' && (
+                            {/* Factory: For scopes defined as Factory */}
+                            {roleScopeLevel === 'Factory' && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Assign Factory</label>
                                     <select
@@ -207,19 +211,7 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
                                 </div>
                             )}
 
-                            {/* Loyalty Points: For Super Admins */}
-                            {currentUser.role === 'Super Admin' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Initial Loyalty Points Balance</label>
-                                    <input
-                                        type="number"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                                        value={formData.loyaltyPoints !== undefined ? formData.loyaltyPoints : 0}
-                                        onChange={(e) => setFormData({ ...formData, loyaltyPoints: parseInt(e.target.value, 10) || 0 })}
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Starting points for this user.</p>
-                                </div>
-                            )}
+
 
                             {/* Password Section Removed for Create/Edit */}
 

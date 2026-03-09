@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from 'react-router-dom';
-import { setGlobalSearch } from '../features/ui/uiSlice';
 import { orderService } from '../services/orderService';
 import { brandService } from '../services/brandService';
 import Card from '../components/ui/Card';
@@ -12,6 +11,7 @@ import DateRangeFilter from '../components/dashboard/DateRangeFilter';
 import { Search, Filter, MapPin, AlertCircle, RefreshCw, ShoppingBag, Clock, PackageCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import FeedbackDashboard from './FeedbackDashboard';
 
 const OrderManagement = () => {
     const { user } = useSelector(state => state.auth);
@@ -20,16 +20,20 @@ const OrderManagement = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState(new Set());
+    const [activeTab, setActiveTab] = useState('orders'); // 'orders' or 'feedback'
 
     const [filterStatus, setFilterStatus] = useState('All');
+    const [typeFilter, setTypeFilter] = useState('All');
+    const [dietaryFilter, setDietaryFilter] = useState('All');
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState('All');
     const [selectedLocation, setSelectedLocation] = useState(null);
     const [dateRange, setDateRange] = useState('All Time');
-    const searchTerm = useSelector((state) => state.ui?.globalSearch || '');
+    const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
     const location = useLocation();
     const [locations, setLocations] = useState([]);
 
-    useEffect(() => { loadOrders(); }, [user, filterStatus, selectedLocation, dateRange]);
+    useEffect(() => { loadOrders(); }, [user, filterStatus, typeFilter, dietaryFilter, paymentMethodFilter, selectedLocation, dateRange]);
     useEffect(() => { loadLocations(); }, []);
 
     // Handle initial order detail view from notification link
@@ -75,6 +79,12 @@ const OrderManagement = () => {
             loadOrders();
         });
 
+        socket.on('order_updated', (data) => {
+            console.log('Order update received via socket:', data);
+            // Refresh order list to show status changes or new items
+            loadOrders();
+        });
+
         return () => socket.disconnect();
     }, []);
 
@@ -97,25 +107,41 @@ const OrderManagement = () => {
         setLoading(true);
         try {
             const scope = { brandId: user.brandId || user.assignedBrand, assignedOutlets: user.assignedOutlets, assignedFactory: user.assignedFactory };
-            const filters = { locationId: selectedLocation, dateRange, status: filterStatus !== 'All' ? filterStatus : undefined };
+            const filters = {
+                locationId: selectedLocation,
+                dateRange,
+                status: filterStatus !== 'All' ? filterStatus : undefined,
+                type: typeFilter !== 'All' ? typeFilter : undefined,
+                dietary: dietaryFilter !== 'All' ? dietaryFilter : undefined,
+                paymentMethod: paymentMethodFilter !== 'All' ? paymentMethodFilter : undefined
+            };
             const data = await orderService.getOrders(user.role, scope, filters);
-            let filtered = data;
-            if (filterStatus !== 'All') filtered = filtered.filter(o => o.status === filterStatus);
-            if (searchTerm) {
-                const lower = searchTerm.toLowerCase();
-                filtered = filtered.filter(o =>
-                    (o.orderId || o.id || '').toLowerCase().includes(lower) ||
-                    (o.storeName || '').toLowerCase().includes(lower) ||
-                    (o.user?.name || o.customerName || '').toLowerCase().includes(lower)
-                );
-            }
-            // Note: storeId-based filtering is intentionally removed from the client side.
-            // Real customer orders do not carry a storeId, so this filter is handled by the backend $or query.
-            setOrders(filtered);
+            setOrders(data);
         } catch (error) {
             toast.error("Failed to load orders");
         } finally { setLoading(false); }
     };
+
+    const filteredOrders = useMemo(() => {
+        let filtered = orders;
+
+        // Apply Status Filter
+        if (filterStatus !== 'All') {
+            filtered = filtered.filter(o => o.status === filterStatus);
+        }
+
+        // Apply Search Filter
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            filtered = filtered.filter(o =>
+                (o.orderId || o.id || o._id || '').toLowerCase().includes(lower) ||
+                (o.storeName || '').toLowerCase().includes(lower) ||
+                (o.user?.name || o.customerName || '').toLowerCase().includes(lower)
+            );
+        }
+
+        return filtered;
+    }, [orders, searchTerm, filterStatus]);
 
     const handleUpdateStatus = async (orderId, newStatus) => {
         if (user.role === 'Super Admin') return;
@@ -221,6 +247,15 @@ const OrderManagement = () => {
         { header: 'Amount', render: (row) => <span className="text-sm font-bold text-neutral-800">${(row.totalPrice || row.totalAmount || 0).toLocaleString()}</span> },
         { header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
         {
+            header: 'Last Modified',
+            render: (row) => (
+                <div className="flex flex-col">
+                    <span className="text-xs font-medium text-neutral-700">{row.modifiedBy || 'System'}</span>
+                    <span className="text-[10px] text-neutral-400">{row.modifiedDate ? new Date(row.modifiedDate).toLocaleString() : 'N/A'}</span>
+                </div>
+            )
+        },
+        {
             header: '',
             render: (row) => (
                 <Button size="xs" variant="ghost" onClick={(e) => { e.stopPropagation(); setSelectedOrder(row); setIsModalOpen(true); }}>View</Button>
@@ -228,8 +263,8 @@ const OrderManagement = () => {
         }
     ];
 
-    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
-    const activeCount = orders.filter(o => ['IN_PRODUCTION', 'CONFIRMED', 'READY', 'OUT_FOR_DELIVERY'].includes(o.status)).length;
+    const pendingCount = filteredOrders.filter(o => o.status === 'PENDING').length;
+    const activeCount = filteredOrders.filter(o => ['IN_PRODUCTION', 'CONFIRMED', 'READY', 'OUT_FOR_DELIVERY'].includes(o.status)).length;
 
     return (
         <div className="space-y-6">
@@ -251,7 +286,7 @@ const OrderManagement = () => {
                         <div className="p-2.5 bg-primary-50 text-primary rounded-xl"><ShoppingBag size={18} /></div>
                         <div>
                             <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Total</p>
-                            <p className="text-xl font-bold text-neutral-900">{orders.length}</p>
+                            <p className="text-xl font-bold text-neutral-900">{filteredOrders.length}</p>
                         </div>
                     </div>
                 </div>
@@ -275,54 +310,103 @@ const OrderManagement = () => {
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-neutral-100 shadow-soft flex flex-wrap gap-3 items-center">
-                {(user.role === 'Super Admin' || user.role === 'Brand Admin' || user.role === 'Area Manager') && (
-                    <div className="relative min-w-[200px]">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={15} />
-                        <select className="w-full pl-10 pr-4 py-2.5 bg-neutral-50/80 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none cursor-pointer" value={selectedLocation || ''} onChange={(e) => setSelectedLocation(e.target.value || null)}>
-                            <option value="">All Locations</option>
-                            {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-                        </select>
-                    </div>
+            {/* Tab Switcher */}
+            <div className="flex items-center gap-1 p-1 bg-neutral-100/50 rounded-2xl w-fit border border-neutral-200/50">
+                <button
+                    onClick={() => setActiveTab('orders')}
+                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'orders'
+                        ? 'bg-white text-neutral-800 shadow-sm'
+                        : 'text-neutral-400 hover:text-neutral-600'
+                        }`}
+                >
+                    Orders
+                </button>
+                {['Brand Admin', 'Store Manager', 'Super Admin'].includes(user?.role) && (
+                    <button
+                        onClick={() => setActiveTab('feedback')}
+                        className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'feedback'
+                            ? 'bg-white text-neutral-800 shadow-sm'
+                            : 'text-neutral-400 hover:text-neutral-600'
+                            }`}
+                    >
+                        Feedback
+                    </button>
                 )}
-                {user.role === 'Store Manager' && user.assignedOutlets?.length > 0 && (
-                    <div className="flex items-center gap-2 px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-600 font-medium">
-                        <MapPin size={15} /> {user.assignedOutlets[0]}
-                    </div>
-                )}
-                {user.role === 'Factory User' && (
-                    <div className="flex items-center gap-2 px-3.5 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm text-primary-700 font-medium">
-                        <MapPin size={15} /> {user.assignedFactory}
-                        <span className="px-1.5 py-0.5 bg-primary-100 rounded-md text-[10px] font-bold">MMC</span>
-                    </div>
-                )}
-                <div className="hidden sm:block h-8 w-px bg-neutral-200" />
-                <DateRangeFilter value={dateRange} onChange={setDateRange} />
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-2xl shadow-card border border-neutral-100/80 overflow-hidden">
-                <div className="flex flex-col sm:flex-row items-center gap-3 p-5 border-b border-neutral-100">
-                    <div className="relative flex-1 w-full">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-                        <input type="text" placeholder="Search orders..." className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary hover:border-neutral-300 transition-all" value={searchTerm} onChange={(e) => dispatch(setGlobalSearch(e.target.value))} />
+            {activeTab === 'orders' ? (
+                <>
+                    {/* Filters */}
+                    <div className="bg-white p-4 rounded-2xl border border-neutral-100 shadow-soft flex flex-wrap gap-3 items-center">
+                        {(user.role === 'Super Admin' || user.role === 'Brand Admin' || user.role === 'Area Manager') && (
+                            <div className="relative min-w-[200px]">
+                                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={15} />
+                                <select className="w-full pl-10 pr-4 py-2.5 bg-neutral-50/80 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none cursor-pointer" value={selectedLocation || ''} onChange={(e) => setSelectedLocation(e.target.value || null)}>
+                                    <option value="">All Locations</option>
+                                    {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {user.role === 'Store Manager' && user.assignedOutlets?.length > 0 && (
+                            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-600 font-medium">
+                                <MapPin size={15} /> {user.assignedOutlets[0]}
+                            </div>
+                        )}
+                        {user.role === 'Factory User' && (
+                            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm text-primary-700 font-medium">
+                                <MapPin size={15} /> {user.assignedFactory}
+                                <span className="px-1.5 py-0.5 bg-primary-100 rounded-md text-[10px] font-bold">MMC</span>
+                            </div>
+                        )}
+                        <div className="hidden sm:block h-8 w-px bg-neutral-200" />
+                        <DateRangeFilter value={dateRange} onChange={setDateRange} />
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Filter size={15} className="text-neutral-400 shrink-0" />
-                        <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                            <option value="All">All Status</option>
-                            <option value="PENDING">Pending</option>
-                            <option value="CONFIRMED">Confirmed</option>
-                            <option value="IN_PRODUCTION">In Production</option>
-                            <option value="READY">Ready</option>
-                            <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
-                            <option value="DELIVERED">Delivered</option>
-                            <option value="CANCELLED">Cancelled</option>                        </select>
+
+                    {/* Table */}
+                    <div className="bg-white rounded-2xl shadow-card border border-neutral-100/80 overflow-hidden">
+                        <div className="flex flex-col sm:flex-row items-center gap-3 p-5 border-b border-neutral-100">
+                            <div className="relative flex-1 w-full">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                                <input type="text" placeholder="Search orders..." className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary hover:border-neutral-300 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                <Filter size={15} className="text-neutral-400 shrink-0" />
+                                <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                                    <option value="All">All Status</option>
+                                    <option value="PENDING">Pending</option>
+                                    <option value="CONFIRMED">Confirmed</option>
+                                    <option value="IN_PRODUCTION">In Production</option>
+                                    <option value="READY">Ready</option>
+                                    <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+                                    <option value="DELIVERED">Delivered</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                </select>
+
+                                <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                                    <option value="All">All Types</option>
+                                    <option value="Standard">Standard</option>
+                                    <option value="MMC">MMC (Factory)</option>
+                                </select>
+
+                                <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={dietaryFilter} onChange={(e) => setDietaryFilter(e.target.value)}>
+                                    <option value="All">All Dietary</option>
+                                    <option value="Eggless">Eggless</option>
+                                    <option value="Egg">With Egg</option>
+                                    <option value="N/A">N/A</option>
+                                </select>
+                                <select className="border border-neutral-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-primary w-full sm:w-auto text-sm font-medium cursor-pointer" value={paymentMethodFilter} onChange={(e) => setPaymentMethodFilter(e.target.value)}>
+                                    <option value="All">All Methods</option>
+                                    <option value="Razorpay">Razorpay</option>
+                                    <option value="COD">COD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <Table columns={columns} data={filteredOrders} isLoading={loading} emptyMessage="No orders found matching filters." onRowClick={(row) => { setSelectedOrder(row); setIsModalOpen(true); }} />
                     </div>
-                </div>
-                <Table columns={columns} data={orders} isLoading={loading} emptyMessage="No orders found matching filters." onRowClick={(row) => { setSelectedOrder(row); setIsModalOpen(true); }} />
-            </div>
+                </>
+            ) : (
+                <FeedbackDashboard />
+            )}
 
             <OrderDetailsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} order={selectedOrder} userRole={user.role} onUpdateStatus={handleUpdateStatus} onCancelOrder={handleCancelOrder} />
         </div>

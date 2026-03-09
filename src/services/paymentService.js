@@ -1,9 +1,9 @@
 import api from '../utils/axiosConfig';
 
 export const paymentService = {
-    async getPayments() {
+    async getPayments(params = {}) {
         try {
-            const response = await api.get('/payments');
+            const response = await api.get('/payments', { params });
             return response.data;
         } catch (error) {
             console.error("Failed to fetch payments", error);
@@ -11,9 +11,9 @@ export const paymentService = {
         }
     },
 
-    async getPaymentStats() {
+    async getPaymentStats(params = {}) {
         try {
-            const response = await api.get('/payments/stats');
+            const response = await api.get('/payments/stats', { params });
             return response.data;
         } catch (error) {
             console.error("Failed to fetch payment stats", error);

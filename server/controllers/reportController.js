@@ -1,132 +1,201 @@
 const Order = require('../models/Order');
 
+// IST Date Boundary Helper (IST is UTC +5:30)
+const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+const getISTStartOfDay = (d) => {
+    const istDate = new Date(d.getTime() + IST_OFFSET);
+    istDate.setUTCHours(0, 0, 0, 0);
+    return new Date(istDate.getTime() - IST_OFFSET);
+};
+
+const getISTEndOfDay = (d) => {
+    const istDate = new Date(d.getTime() + IST_OFFSET);
+    istDate.setUTCHours(23, 59, 59, 999);
+    return new Date(istDate.getTime() - IST_OFFSET);
+};
+
 // Helper to get date query based on range string
-const getDateQuery = (dateRange) => {
-    const now = new Date();
-    const query = {};
-    if (dateRange === 'Today') {
-        const start = new Date(now.setHours(0, 0, 0, 0));
-        query.createdAt = { $gte: start };
-    } else if (dateRange === 'Yesterday') {
-        const start = new Date(now);
-        start.setDate(start.getDate() - 1);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt = { $gte: start, $lte: end };
-    } else if (dateRange === 'This Week') {
-        const start = new Date(now);
-        start.setDate(start.getDate() - start.getDay());
-        start.setHours(0, 0, 0, 0);
-        query.createdAt = { $gte: start };
-    } else if (dateRange === 'This Month') {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        query.createdAt = { $gte: start };
-    } else if (dateRange === 'This Year') {
-        const start = new Date(now.getFullYear(), 0, 1);
-        query.createdAt = { $gte: start };
+const getDateQuery = (range, qStart, qEnd) => {
+    let startDate = getISTStartOfDay(new Date());
+    let endDate = getISTEndOfDay(new Date());
+
+    if ((range === 'Custom' || range === 'Custom Date' || range === 'Date Range') && qStart) {
+        const [y, m, d] = qStart.split('-').map(Number);
+        const startDt = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+        startDate = new Date(startDt.getTime() - IST_OFFSET);
+
+        if (qEnd) {
+            const [ey, em, ed] = qEnd.split('-').map(Number);
+            const endDt = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999));
+            endDate = new Date(endDt.getTime() - IST_OFFSET);
+        } else {
+            endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+        }
+    } else if (range === 'Today') {
+        // Default is Today
+    } else if (range === 'Yesterday') {
+        const yesterday = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+        startDate = getISTStartOfDay(yesterday);
+        endDate = getISTEndOfDay(yesterday);
+    } else if (range === 'This Week' || range === 'Week') {
+        startDate = new Date(getISTStartOfDay(new Date()).getTime() - 7 * 24 * 60 * 60 * 1000);
+        endDate = getISTEndOfDay(new Date());
+    } else if (range === 'This Month' || range === 'Month') {
+        const now = new Date(new Date().getTime() + IST_OFFSET);
+        const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        startDate = new Date(monthStart.getTime() - IST_OFFSET);
+        endDate = getISTEndOfDay(new Date());
+    } else if (range === 'Last Month') {
+        const now = new Date(new Date().getTime() + IST_OFFSET);
+        const firstOfThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const firstOfLastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+        startDate = new Date(firstOfLastMonth.getTime() - IST_OFFSET);
+        endDate = new Date(firstOfThisMonth.getTime() - IST_OFFSET - 1);
+    } else if (range === 'This Year' || range === 'Year') {
+        const now = new Date(new Date().getTime() + IST_OFFSET);
+        const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+        startDate = new Date(yearStart.getTime() - IST_OFFSET);
+        endDate = getISTEndOfDay(new Date());
+    } else if (range === 'All Time') {
+        return {};
     }
-    return query;
+
+    return { createdAt: { $gte: startDate, $lte: endDate } };
 };
 
 // @desc    Get analytics data for Reports page
 // @route   GET /api/reports/analytics
 // @access  Private
 const getAnalytics = async (req, res) => {
-    const { role, assignedBrand, assignedOutlets, assignedFactory } = req.user;
-    const { dateRange } = req.query;
+    const { scopeLevel, assignedBrand, assignedOutlets } = req.user;
+    const { dateRange, startDate: qStart, endDate: qEnd } = req.query;
 
-    let matchQuery = getDateQuery(dateRange || 'This Month');
+    let dateQuery = getDateQuery(dateRange || 'This Month', qStart, qEnd);
+    let matchQuery = { ...dateQuery };
 
-    // Role-based scoping
-    if (role === 'Brand Admin') {
-        matchQuery.brandId = assignedBrand;
-    } else if (role === 'Area Manager' || role === 'Store Manager') {
-        if (assignedOutlets && assignedOutlets.length > 0) {
-            matchQuery.storeId = { $in: assignedOutlets };
+    // Scope-level driven filtering
+    if (scopeLevel === 'Brand') {
+        const brandId = req.query.brandId || assignedBrand;
+        if (brandId) matchQuery.brandId = brandId;
+    } else if (scopeLevel === 'Outlet') {
+        const storeIdArr = req.query.assignedOutlets || assignedOutlets;
+        if (storeIdArr && storeIdArr.length > 0) {
+            matchQuery.storeId = { $in: storeIdArr };
         } else {
+            // Nullify results if no outlets assigned but restricted to Outlet scope
             matchQuery._id = null;
         }
-        matchQuery.isMMC = true;
-    } else if (role !== 'Super Admin') {
-        // Fallback for unauthorized roles, though middleware should catch
+    } else if (scopeLevel === 'None') {
         matchQuery._id = null;
     }
 
     try {
-        const orders = await Order.find(matchQuery);
+        // 1. Overview Metrics (Total Revenue, Total Orders, Avg Order Value)
+        // Only count revenue for paid/completed orders
+        const revenueMatch = {
+            ...matchQuery,
+            $or: [
+                { paymentStatus: 'Paid' },
+                { isPaid: true },
+                { status: 'Delivered' }
+            ]
+        };
 
-        // Calculate Overview
-        let totalRevenue = 0;
-        let totalOrders = orders.length;
-
-        const paymentMethodsMap = {};
-        const popularItemsMap = {};
-
-        // Let's populate revenue trend based on days of the week for simplicity right now
-        // In a real app we'd group by day of month, but let's emulate the mock format initially
-        const revenueTrendMap = { 'Mon': 0, 'Tue': 0, 'Wed': 0, 'Thu': 0, 'Fri': 0, 'Sat': 0, 'Sun': 0 };
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-        for (const order of orders) {
-            const amount = Number(order.totalPrice || order.totalAmount || 0);
-
-            // Only count revenue for paid/completed orders
-            if (order.paymentStatus === 'Paid' || order.isPaid || order.status === 'Delivered') {
-                totalRevenue += amount;
-            }
-
-            // Payment Methods
-            const method = order.paymentMethod || 'Razorpay';
-            paymentMethodsMap[method] = (paymentMethodsMap[method] || 0) + 1;
-
-            // Popular Items
-            if (order.orderItems && order.orderItems.length > 0) {
-                for (const item of order.orderItems) {
-                    const itemName = item.name;
-                    const qty = Number(item.qty || 1);
-                    popularItemsMap[itemName] = (popularItemsMap[itemName] || 0) + qty;
+        const overviewAgg = await Order.aggregate([
+            { $match: matchQuery },
+            {
+                $group: {
+                    _id: null,
+                    totalOrders: { $sum: 1 },
+                    totalRevenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $or: [
+                                        { $eq: ["$paymentStatus", "Paid"] },
+                                        { $eq: ["$isPaid", true] },
+                                        { $eq: ["$status", "Delivered"] }
+                                    ]
+                                },
+                                { $ifNull: ["$totalPrice", "$totalAmount"] },
+                                0
+                            ]
+                        }
+                    }
                 }
             }
+        ]);
 
-            // Trend
-            const orderDate = new Date(order.createdAt);
-            const dayName = days[orderDate.getDay()];
-            revenueTrendMap[dayName] += amount;
+        const overview = overviewAgg[0] || { totalOrders: 0, totalRevenue: 0 };
+        const avgOrderValue = overview.totalOrders > 0 ? Number((overview.totalRevenue / overview.totalOrders).toFixed(2)) : 0;
+
+        // 2. Revenue Trend (Daily, IST-aware)
+        const revenueTrendAgg = await Order.aggregate([
+            { $match: revenueMatch },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "+05:30" } },
+                    revenue: { $sum: { $ifNull: ["$totalPrice", "$totalAmount"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Filling in dates for the chart
+        const start = dateQuery.createdAt?.$gte || new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000);
+        const end = dateQuery.createdAt?.$lte || new Date();
+        const trendMap = {};
+        revenueTrendAgg.forEach(item => { trendMap[item._id] = item.revenue; });
+
+        const revenueTrend = [];
+        let curr = new Date(start);
+        while (curr <= end) {
+            const istDate = new Date(curr.getTime() + IST_OFFSET);
+            const dateStr = istDate.toISOString().split('T')[0];
+            revenueTrend.push({
+                name: dateStr,
+                revenue: trendMap[dateStr] || 0
+            });
+            curr.setDate(curr.getDate() + 1);
         }
 
-        const avgOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders).toFixed(2) : 0;
+        // 3. Payment Methods
+        const paymentMethodsAgg = await Order.aggregate([
+            { $match: matchQuery },
+            { $group: { _id: { $ifNull: ["$paymentMethod", "Razorpay"] }, count: { $sum: 1 } } }
+        ]);
 
-        // Format Popular Items
-        const popularItems = Object.entries(popularItemsMap)
-            .map(([name, orders]) => ({ name, orders }))
-            .sort((a, b) => b.orders - a.orders)
-            .slice(0, 5); // Top 5
-
-        // Format payment methods
         const colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
-        const paymentMethods = Object.entries(paymentMethodsMap).map(([name, count], index) => {
-            return {
-                name,
-                value: Math.round((count / totalOrders) * 100) || 0,
-                color: colors[index % colors.length]
-            };
-        });
+        const paymentMethods = paymentMethodsAgg.map((item, index) => ({
+            name: item._id,
+            value: Number(((item.count / (overview.totalOrders || 1)) * 100).toFixed(0)),
+            color: colors[index % colors.length]
+        }));
 
-        // Format trend
-        // To keep the chart ordered Mon-Sun
-        const orderedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const revenueTrend = orderedDays.map(day => ({
-            name: day,
-            revenue: revenueTrendMap[day]
+        // 4. Popular Items
+        const popularItemsAgg = await Order.aggregate([
+            { $match: matchQuery },
+            { $unwind: "$orderItems" },
+            {
+                $group: {
+                    _id: "$orderItems.name",
+                    orders: { $sum: { $ifNull: ["$orderItems.qty", 1] } }
+                }
+            },
+            { $sort: { orders: -1 } },
+            { $limit: 5 }
+        ]);
+
+        const popularItems = popularItemsAgg.map(item => ({
+            name: item._id,
+            orders: item.orders
         }));
 
         res.json({
             overview: {
-                totalRevenue,
-                totalOrders,
+                totalRevenue: overview.totalRevenue,
+                totalOrders: overview.totalOrders,
                 avgOrderValue,
-                // Hardcoding growth to 0 for now as it requires previous period calculation
                 growth: 0
             },
             revenueTrend,
@@ -143,22 +212,24 @@ const getAnalytics = async (req, res) => {
 // @route   GET /api/reports/download?type=Sales&dateRange=This Month
 // @access  Private
 const downloadReport = async (req, res) => {
-    const { role, assignedBrand, assignedOutlets, assignedFactory } = req.user;
-    const { type, dateRange } = req.query;
+    const { scopeLevel, assignedBrand, assignedOutlets, assignedFactory } = req.user;
+    const { type, dateRange, startDate: qStart, endDate: qEnd } = req.query;
 
-    let matchQuery = getDateQuery(dateRange || 'This Month');
+    let matchQuery = getDateQuery(dateRange || 'This Month', qStart, qEnd);
 
-    // Role-based scoping
-    if (role === 'Brand Admin') {
+    // Scope-level driven filtering
+    if (scopeLevel === 'Brand') {
         matchQuery.brandId = assignedBrand;
-    } else if (role === 'Area Manager' || role === 'Store Manager') {
+    } else if (scopeLevel === 'Outlet') {
         if (assignedOutlets && assignedOutlets.length > 0) {
             matchQuery.storeId = { $in: assignedOutlets };
         } else {
             matchQuery._id = null;
         }
         matchQuery.isMMC = true;
-    } else if (role !== 'Super Admin') {
+    } else if (scopeLevel === 'Factory') {
+        matchQuery.factoryId = assignedFactory;
+    } else if (scopeLevel === 'None') {
         matchQuery._id = null;
     }
 
@@ -170,7 +241,8 @@ const downloadReport = async (req, res) => {
         if (type === 'Sales' || type === 'Summary') {
             csvContent += 'Date,Order ID,Customer,Amount,Status\n';
             orders.forEach(o => {
-                const dateSplit = o.createdAt.toISOString().split('T')[0];
+                const istDate = new Date(o.createdAt.getTime() + IST_OFFSET);
+                const dateSplit = istDate.toISOString().split('T')[0];
                 const orderId = o.orderId || o._id.toString();
                 const cust = o.user?.name || o.customerName || 'Guest';
                 const amt = Number(o.totalPrice || o.totalAmount || 0);

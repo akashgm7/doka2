@@ -68,10 +68,19 @@ const orderSchema = new mongoose.Schema({
     earnedLoyaltyPoints: {
         type: Number,
         default: 0
+    },
+    // Customer Feedback
+    feedback: {
+        rating: { type: Number, min: 1, max: 5 },
+        comment: { type: String, trim: true },
+        submittedAt: { type: Date }
     }
 }, {
     timestamps: true
 });
+
+const auditPlugin = require('../plugins/auditPlugin');
+orderSchema.plugin(auditPlugin);
 
 const Order = dokaConnection.model('Order', orderSchema);
 

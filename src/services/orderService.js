@@ -8,7 +8,8 @@ export const orderService = {
                     status: filters.status,
                     type: filters.type, // 'MMC' or 'Standard'
                     dateRange: filters.dateRange,
-                    locationId: filters.locationId
+                    locationId: filters.locationId,
+                    paymentMethod: filters.paymentMethod
                 }
             });
             return response.data;

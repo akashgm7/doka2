@@ -226,6 +226,33 @@ const ItemFormModal = ({ isOpen, onClose, initialData, onSubmit, isReadOnly = fa
                                         onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
                                     />
                                 </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium text-gray-700">Category</label>
+                                    <select
+                                        disabled={isReadOnly}
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm disabled:bg-neutral-50"
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    >
+                                        <option value="General">General</option>
+                                        <option value="Cakes">Cakes</option>
+                                        <option value="Pastries">Pastries</option>
+                                        <option value="MMC">MMC</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium text-gray-700">Dietary</label>
+                                    <select
+                                        disabled={isReadOnly}
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm disabled:bg-neutral-50"
+                                        value={formData.dietary || 'Eggless'}
+                                        onChange={(e) => setFormData({ ...formData, dietary: e.target.value })}
+                                    >
+                                        <option value="Eggless">Eggless</option>
+                                        <option value="Egg">Egg</option>
+                                        <option value="N/A">N/A</option>
+                                    </select>
+                                </div>
                                 <div className="col-span-2">
                                     <label className="block text-sm font-medium text-gray-700">Product Image</label>
                                     <div className="mt-1 flex items-center gap-4">
@@ -312,8 +339,8 @@ const ItemFormModal = ({ isOpen, onClose, initialData, onSubmit, isReadOnly = fa
                         </form>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

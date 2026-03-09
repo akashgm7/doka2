@@ -2,7 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, Loader2, Inbox } from 'lucide-react';
 
-const Table = ({ columns, data, isLoading, emptyMessage = "No data found.", onRowClick }) => {
+const Table = ({ columns, data, isLoading, emptyMessage = "No data found.", emptyIcon, emptyAction, onRowClick, selectable, selectedIds = [], onSelectionChange }) => {
     if (isLoading) {
         return (
             <div className="w-full flex flex-col justify-center items-center py-16 text-neutral-400">
@@ -14,9 +14,10 @@ const Table = ({ columns, data, isLoading, emptyMessage = "No data found.", onRo
 
     if (!data || data.length === 0) {
         return (
-            <div className="w-full flex flex-col items-center justify-center py-16 text-neutral-400">
-                <Inbox className="w-10 h-10 mb-3 text-neutral-300" />
-                <span className="text-sm font-medium">{emptyMessage}</span>
+            <div className="w-full flex flex-col items-center justify-center py-16 text-neutral-400 animate-in fade-in duration-300">
+                {emptyIcon ? emptyIcon : <Inbox className="w-12 h-12 mb-4 text-neutral-300 animate-bounce-slow" />}
+                <span className="text-base font-medium text-neutral-600 mb-1">{emptyMessage}</span>
+                {emptyAction && <div className="mt-4">{emptyAction}</div>}
             </div>
         );
     }
@@ -26,6 +27,22 @@ const Table = ({ columns, data, isLoading, emptyMessage = "No data found.", onRo
             <table className="min-w-full">
                 <thead>
                     <tr className="border-b border-neutral-100">
+                        {selectable && (
+                            <th scope="col" className="px-5 py-3.5 w-12 text-left bg-neutral-50/50">
+                                <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded text-primary focus:ring-primary border-neutral-300 cursor-pointer"
+                                    checked={data.length > 0 && selectedIds.length === data.length}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            onSelectionChange(data.map(row => row.id || row._id));
+                                        } else {
+                                            onSelectionChange([]);
+                                        }
+                                    }}
+                                />
+                            </th>
+                        )}
                         {columns.map((col, index) => (
                             <th
                                 key={index}
@@ -50,6 +67,23 @@ const Table = ({ columns, data, isLoading, emptyMessage = "No data found.", onRo
                                 onRowClick && "cursor-pointer"
                             )}
                         >
+                            {selectable && (
+                                <td className="px-5 py-3.5 w-12" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded text-primary focus:ring-primary border-neutral-300 cursor-pointer"
+                                        checked={selectedIds.includes(row.id || row._id)}
+                                        onChange={(e) => {
+                                            const id = row.id || row._id;
+                                            if (e.target.checked) {
+                                                onSelectionChange([...selectedIds, id]);
+                                            } else {
+                                                onSelectionChange(selectedIds.filter(selectedId => selectedId !== id));
+                                            }
+                                        }}
+                                    />
+                                </td>
+                            )}
                             {columns.map((col, colIndex) => (
                                 <td key={colIndex} className="px-5 py-3.5 whitespace-nowrap text-sm text-neutral-600">
                                     {col.render ? col.render(row) : (col.accessor && typeof col.accessor === 'function' ? col.accessor(row) : row[col.accessor])}

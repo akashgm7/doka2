@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { adminConnection } = require('../config/db');
+const { dokaConnection } = require('../config/db');
 
 const storeSchema = new mongoose.Schema({
     name: { type: String, required: true },
@@ -41,6 +41,9 @@ const storeSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const Store = adminConnection.model('Store', storeSchema);
+const auditPlugin = require('../plugins/auditPlugin');
+storeSchema.plugin(auditPlugin);
+
+const Store = dokaConnection.model('Store', storeSchema);
 
 module.exports = Store;

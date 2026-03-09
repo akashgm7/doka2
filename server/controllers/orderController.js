@@ -6,90 +6,99 @@ const User = require('../models/User');
 // @route   GET /api/orders
 // @access  Private
 const getOrders = async (req, res) => {
-    const { role, assignedBrand, assignedOutlets } = req.user;
-    const { status, locationId, dateRange } = req.query;
+    const { scopeLevel, assignedBrand, assignedOutlets } = req.user;
+    const { status, locationId, dateRange, type, dietary, paymentMethod, startDate: qStart, endDate: qEnd } = req.query;
 
     let query = {};
 
-    // Role-based filtering
-    if (role === 'Brand Admin') {
-        // Match by brandId OR orders with no storeId under this brand
-        query.$or = [
-            { brandId: assignedBrand },
-            { brandId: { $exists: false }, storeId: { $exists: false } }
-        ];
-    } else if (role === 'Store User' || role === 'Store Manager' || role === 'Area Manager') {
+    // IST Helper
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const getISTStartOfDay = (d) => {
+        const istDate = new Date(d.getTime() + IST_OFFSET);
+        istDate.setUTCHours(0, 0, 0, 0);
+        return new Date(istDate.getTime() - IST_OFFSET);
+    };
+    const getISTEndOfDay = (d) => {
+        const istDate = new Date(d.getTime() + IST_OFFSET);
+        istDate.setUTCHours(23, 59, 59, 999);
+        return new Date(istDate.getTime() - IST_OFFSET);
+    };
+
+    // Scope-level filtering
+    if (scopeLevel === 'Brand') {
+        query.brandId = assignedBrand;
+    } else if (scopeLevel === 'Outlet') {
         if (assignedOutlets && assignedOutlets.length > 0) {
-            // Find stores by name (in case assignedOutlets stores names)
-            const storesByName = await Store.find({ name: { $in: assignedOutlets } }).select('_id');
-            const nameBasedIds = storesByName.map(s => s._id.toString());
-
-            // Find stores by ID string (in case assignedOutlets stores ObjectId strings)
-            const storesByIdStr = await Store.find({
-                _id: { $in: assignedOutlets.filter(o => /^[0-9a-fA-F]{24}$/.test(o)) }
-            }).select('_id name');
-            const idBasedIds = storesByIdStr.map(s => s._id.toString());
-            const idBasedNames = storesByIdStr.map(s => s.name);
-
-            // Combine all possible matching values
-            const allPossible = [...new Set([...assignedOutlets, ...nameBasedIds, ...idBasedIds, ...idBasedNames])];
-
-            console.log(`[Orders] ${role} - assignedOutlets: ${JSON.stringify(assignedOutlets)}, allPossible: ${JSON.stringify(allPossible)}`);
-
-            // Use $or: match orders with a storeId in the list, OR orders with no storeId
-            // (orders placed via the customer app often don't have a storeId)
+            // Find stores by ID string and name for broad matching
             const brandId = assignedBrand || 'brand-001';
             query.$or = [
-                { storeId: { $in: allPossible } },
+                { storeId: { $in: assignedOutlets } },
                 { storeId: { $exists: false }, brandId: brandId },
                 { storeId: null, brandId: brandId }
             ];
         } else {
-            // No outlets assigned - return nothing
             query._id = null;
-            console.log(`[Orders] ${role} has no assignedOutlets - returning empty`);
         }
-    } else if (role === 'Factory Manager' || role === 'Factory User') {
+    } else if (scopeLevel === 'Factory') {
         query.isMMC = true;
-        if (req.user.assignedFactory) {
-            query.storeId = req.user.assignedFactory;
-        }
-    } else if (role === 'Super Admin') {
-        // Super Admin sees everything
+        if (req.user.assignedFactory) query.storeId = req.user.assignedFactory;
+    } else if (scopeLevel === 'None') {
+        query._id = null;
     }
 
-    // Query Params — applied after role filter
-    if (status) query.status = status;
-    // NOTE: locationId filter is intentionally not applied here because customer orders
-    // do not carry a storeId field. When the customer checkout adds store selection,
-    // this can be re-enabled: if (locationId) { delete query.$or; query.storeId = locationId; }
+    // Query Params
+    if (status && status !== 'All') query.status = status;
+    if (type === 'MMC') query.isMMC = true;
+    else if (type === 'Standard') query.isMMC = { $ne: true };
+
+    if (dietary && dietary !== 'All') {
+        query['orderItems.dietary'] = dietary;
+    }
+
+    if (paymentMethod && paymentMethod !== 'All') {
+        query.paymentMethod = paymentMethod;
+    }
 
     // Date range filter
     if (dateRange && dateRange !== 'All Time') {
-        const now = new Date();
-        let startDate;
+        let start, end = getISTEndOfDay(new Date());
+
         if (dateRange === 'Today') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            start = getISTStartOfDay(new Date());
         } else if (dateRange === 'Yesterday') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-            const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            query.createdAt = { $gte: startDate, $lt: endDate };
-            startDate = null; // handled above
+            const yesterday = new Date(Date.now() - 86400000);
+            start = getISTStartOfDay(yesterday);
+            end = getISTEndOfDay(yesterday);
         } else if (dateRange === 'This Week') {
-            const day = now.getDay();
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+            start = new Date(getISTStartOfDay(new Date()).getTime() - 7 * 24 * 60 * 60 * 1000);
         } else if (dateRange === 'This Month') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            const now = new Date(Date.now() + IST_OFFSET);
+            const mStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+            start = new Date(mStart.getTime() - IST_OFFSET);
         } else if (dateRange === 'Last Month') {
-            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            query.createdAt = { $gte: startDate, $lt: endDate };
-            startDate = null;
-        } else if (dateRange === 'This Year') {
-            startDate = new Date(now.getFullYear(), 0, 1);
+            const now = new Date(Date.now() + IST_OFFSET);
+            const firstOfThis = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+            const lastOfLast = new Date(firstOfThis.getTime() - 1);
+            const firstOfLast = new Date(Date.UTC(lastOfLast.getUTCFullYear(), lastOfLast.getUTCMonth(), 1));
+            start = new Date(firstOfLast.getTime() - IST_OFFSET);
+            const lastOfLastIST = new Date(lastOfLast.getTime() + IST_OFFSET);
+            lastOfLastIST.setUTCHours(23, 59, 59, 999);
+            end = new Date(lastOfLastIST.getTime() - IST_OFFSET);
+        } else if (dateRange === 'Custom' || dateRange === 'Custom Date' || dateRange === 'Date Range') {
+            if (qStart) {
+                const [y, m, d] = qStart.split('-').map(Number);
+                start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - IST_OFFSET);
+                if (qEnd) {
+                    const [ey, em, ed] = qEnd.split('-').map(Number);
+                    end = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999) - IST_OFFSET);
+                } else {
+                    end = new Date(start.getTime() + 86400000 - 1);
+                }
+            }
         }
-        if (startDate) {
-            query.createdAt = { $gte: startDate };
+
+        if (start) {
+            query.createdAt = { $gte: start, $lte: end };
         }
     }
 
@@ -133,10 +142,9 @@ const getOrderById = async (req, res) => {
 // @access  Private
 const updateOrderStatus = async (req, res) => {
     const { status, internalNotes } = req.body;
-    const { role } = req.user;
-
-    // Check if user is Brand Admin or Store Manager
-    if (!['Brand Admin', 'Store Manager', 'Area Manager', 'Super Admin', 'Factory User', 'Factory Manager'].includes(role)) {
+    // Instead of checking specific roles, check if scope Level allows status updates
+    // Assume None implies absolutely no permission. Actual permission check is in authMiddleware
+    if (req.user.scopeLevel === 'None') {
         return res.status(403).json({ message: 'Not authorized to update order status' });
     }
 
@@ -213,4 +221,68 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 
-module.exports = { getOrders, getOrderById, updateOrderStatus };
+// @desc    Submit feedback for a delivered order
+// @route   POST /api/orders/:id/feedback
+// @access  Private (order owner only)
+const submitFeedback = async (req, res) => {
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+    }
+
+    try {
+        let order;
+        if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            order = await Order.findById(req.params.id);
+        }
+        if (!order) {
+            order = await Order.findOne({ orderId: req.params.id });
+        }
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        // Verify order belongs to the requesting user
+        if (order.user.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Not authorized to submit feedback for this order' });
+        }
+
+        if (order.status !== 'DELIVERED') {
+            return res.status(400).json({ message: 'Feedback can only be submitted for delivered orders' });
+        }
+
+        if (order.feedback && order.feedback.rating) {
+            return res.status(400).json({ message: 'Feedback already submitted for this order' });
+        }
+
+        order.feedback = {
+            rating: Number(rating),
+            comment: comment || '',
+            submittedAt: new Date()
+        };
+
+        const updatedOrder = await order.save();
+
+        // Emit real-time socket event
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('feedbackAdded', {
+                orderId: order._id,
+                storeId: order.storeId,
+                brandId: order.brandId,
+                feedback: order.feedback,
+                customerName: req.user.name || 'Customer',
+                orderRef: order.orderId || order._id
+            });
+            console.log(`[Socket] Emitted feedbackAdded for order: ${order._id}`);
+        }
+
+        res.json(updatedOrder);
+    } catch (error) {
+        console.error('[Feedback] Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { getOrders, getOrderById, updateOrderStatus, submitFeedback };
