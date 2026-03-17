@@ -13,19 +13,23 @@ const auditPlugin = function (schema, options) {
     // Helper to create log entry
     const createAuditRecord = async (doc, actionType, details = null) => {
         try {
-            const AuditLog = mongoose.model('AuditLog');
+            const AuditLog = doc.constructor.db.model('AuditLog');
             const info = getAuditInfo() || (doc && doc._auditInfo ? doc._auditInfo : null);
             if (!info) return;
 
             const modelName = doc.constructor.modelName || 'Unknown';
             const resourceId = doc.orderId || doc.name || doc._id;
 
+            // Inheritance: If performer is Super Admin (no brandId), tag with resource's brand
+            const brandId = info.brandId || doc.assignedBrand || doc.brandId || null;
+            const outletId = info.outletId || doc.assignedOutlet || doc.outletId || null;
+
             await AuditLog.create({
                 user: info.email || 'System',
                 userId: info.userId,
                 role: info.role || 'System',
-                brandId: info.brandId,
-                outletId: info.outletId,
+                brandId: brandId,
+                outletId: outletId,
                 action: `${actionType} ${modelName}`,
                 resource: `${modelName} ${resourceId}`,
                 status: 'Success',
@@ -63,7 +67,7 @@ const auditPlugin = function (schema, options) {
                 });
                 this._auditDiff = diff;
             }
-            // Attach info to document for post-save hook
+            // Attach info to document for post-hook
             if (info) this._auditInfo = info;
         } catch (err) {
             console.error('[AuditPlugin] Pre-save error:', err);
@@ -109,6 +113,15 @@ const auditPlugin = function (schema, options) {
 
     schema.pre('findOneAndUpdate', updateHook);
     schema.pre('updateOne', updateHook);
+
+    // Deletion hooks
+    schema.post('deleteOne', { document: true, query: false }, async function (doc) {
+        await createAuditRecord(doc, 'Delete');
+    });
+
+    schema.post('remove', async function (doc) {
+        await createAuditRecord(doc, 'Delete');
+    });
 };
 
 module.exports = auditPlugin;

@@ -42,9 +42,15 @@ const seedRBAC = async () => {
                 scopeLevel: 'Brand',
                 permissions: [
                     'sys_login', 'sys_logout', 'manage_users', 'brand_switching',
-                    'view_locations', 'view_audit_logs', 'manage_master_menu',
-                    'view_menu', 'view_orders', 'manage_orders', 'view_reports',
-                    'view_payments', 'notifications_automated', 'notifications_manual'
+                    'view_locations', 'manage_locations', 'toggle_outlet', 'view_audit_logs',
+                    'manage_master_menu', 'manage_outlet_menu', 'toggle_item_availability',
+                    'view_menu', 'place_order_ready', 'place_order_custom', 'combine_order',
+                    'view_orders', 'manage_orders', 'update_order_status', 'cancel_orders',
+                    'delivery_visibility', 'delivery_assignment', 'geo_boundary',
+                    'factory_visibility', 'factory_calendar', 'production_execution', 'production_capacity',
+                    'view_reports', 'view_payments', 'manage_refunds', 'download_invoices',
+                    'notifications_automated', 'notifications_manual', 'loyalty_earn_redeem',
+                    'loyalty_view', 'add_ons_config', 'ai_recommendations', 'order_history'
                 ]
             },
             {

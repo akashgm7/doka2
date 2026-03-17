@@ -23,6 +23,7 @@ const UserManagement = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [successModal, setSuccessModal] = useState({ isOpen: false, email: '' });
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, userId: null });
+    const [errorModal, setErrorModal] = useState({ isOpen: false, title: '', message: '' });
 
     useEffect(() => {
         const fetchAllData = async () => {
@@ -59,7 +60,11 @@ const UserManagement = () => {
             fetchUsers();
             setIsModalOpen(false);
             setSuccessModal({ isOpen: true, email: formData.email });
-        } catch (e) { console.error("Failed to create user", e); alert("Failed to create user"); }
+        } catch (e) {
+            console.error("Failed to create user", e);
+            const msg = e.response?.data?.message || "Failed to create user";
+            setErrorModal({ isOpen: true, title: "Creation Failed", message: msg });
+        }
     };
 
     const handleUpdateUser = async (formData) => {
@@ -67,7 +72,11 @@ const UserManagement = () => {
             await userService.updateUser(editingUser._id, formData);
             fetchUsers();
             setEditingUser(null);
-        } catch (e) { console.error("Failed to update user", e); alert("Failed to update user"); }
+        } catch (e) {
+            console.error("Failed to update user", e);
+            const msg = e.response?.data?.message || "Failed to update user";
+            setErrorModal({ isOpen: true, title: "Update Failed", message: msg });
+        }
     };
 
     const handleDeleteUser = (userId) => { setDeleteModal({ isOpen: true, userId }); };
@@ -93,11 +102,22 @@ const UserManagement = () => {
     };
 
     const filteredUsers = users.filter(user => {
-        const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesRole = roleFilter === 'All' ||
-            user.role === roleFilter ||
-            (roleFilter === 'Customers' && user.role === 'Store User');
+        const matchesSearch = (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+        // Robust role matching for Customers/Customer/Store User
+        const getSimplifiedRole = (r) => {
+            if (!r) return '';
+            const lower = r.toLowerCase();
+            if (lower === 'customer' || lower === 'customers' || lower === 'store user') return 'customers';
+            return lower;
+        };
+
+        const simplifiedUserRole = getSimplifiedRole(user.role);
+        const simplifiedFilterRole = getSimplifiedRole(roleFilter);
+
+        const matchesRole = roleFilter === 'All' || simplifiedUserRole === simplifiedFilterRole;
+
         return matchesSearch && matchesRole;
     });
 
@@ -118,7 +138,13 @@ const UserManagement = () => {
         },
         {
             header: 'Role',
-            render: (user) => <Badge variant="primary" dot>{user.role === 'Store User' ? 'Customers' : user.role}</Badge>
+            render: (user) => {
+                const roleLower = user.role?.toLowerCase();
+                const displayRole = (roleLower === 'customer' || roleLower === 'customers' || roleLower === 'store user')
+                    ? 'Customers'
+                    : user.role;
+                return <Badge variant="primary" dot>{displayRole}</Badge>;
+            }
         },
         {
             header: 'Status',
@@ -264,6 +290,16 @@ const UserManagement = () => {
                 confirmText="Delete"
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteModal({ isOpen: false, userId: null })}
+            />
+
+            <ConfirmationModal
+                isOpen={errorModal.isOpen}
+                type="danger"
+                title={errorModal.title}
+                message={errorModal.message}
+                confirmText="Got it"
+                onConfirm={() => setErrorModal({ isOpen: false, title: '', message: '' })}
+                onCancel={() => setErrorModal({ isOpen: false, title: '', message: '' })}
             />
         </div>
     );

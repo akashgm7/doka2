@@ -5,28 +5,20 @@ import Badge from '../../components/ui/Badge';
 import { Search, Filter, RefreshCw, Calendar, MapPin, Download, ChevronDown, ChevronRight, Info, Eye } from 'lucide-react';
 import DateRangeFilter from '../../components/dashboard/DateRangeFilter';
 import toast from 'react-hot-toast';
-
 import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
+import Modal from '../../components/ui/Modal';
 
 const AuditLogs = () => {
     const { user } = useSelector(state => state.auth);
     const [searchTerm, setSearchTerm] = useState('');
     const dispatch = useDispatch();
-    const [newLogCount, setNewLogCount] = useState(0);
-    const [expandedLogs, setExpandedLogs] = useState(new Set());
-
-    const toggleExpand = (id) => {
-        setExpandedLogs(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showFilters, setShowFilters] = useState(true);
+    const [showFilters, setShowFilters] = useState(false);
+    const [selectedLog, setSelectedLog] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
     const [dateRange, setDateRange] = useState('Today');
     const [customDates, setCustomDates] = useState({
         startDate: new Date().toISOString().split('T')[0],
@@ -36,6 +28,11 @@ const AuditLogs = () => {
         status: 'All',
         action: 'All'
     });
+
+    const handleLogClick = (log) => {
+        setSelectedLog(log);
+        setIsModalOpen(true);
+    };
 
     useEffect(() => {
         const socket = io(`http://${window.location.hostname}:5002`);
@@ -118,8 +115,6 @@ const AuditLogs = () => {
         toast.success("Audit logs exported successfully");
     };
 
-    const uniqueActions = ['All', ...new Set(logs.map(log => log.action))];
-
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -165,7 +160,6 @@ const AuditLogs = () => {
                                     <span className="hidden sm:inline">Export</span>
                                 </button>
 
-                                {/* Filter Dropdown */}
                                 {showFilters && (
                                     <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-neutral-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-100">
                                         <div className="space-y-4">
@@ -221,7 +215,7 @@ const AuditLogs = () => {
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Action</th>
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Resource</th>
                                 <th className="p-4 font-medium text-neutral-500 text-sm">Status</th>
-                                <th className="p-4 font-medium text-neutral-500 text-sm text-right">Details</th>
+                                <th className="p-4 font-medium text-neutral-500 text-sm text-right">View</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -235,70 +229,135 @@ const AuditLogs = () => {
                                 </tr>
                             ) : (
                                 logs.map((log) => (
-                                    <React.Fragment key={log._id}>
-                                        <tr
-                                            className={`border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 cursor-pointer transition-colors ${expandedLogs.has(log._id) ? 'bg-neutral-50' : ''}`}
-                                            onClick={() => log.details && toggleExpand(log._id)}
-                                        >
-                                            <td className="p-4 text-sm text-neutral-600 whitespace-nowrap">
-                                                {new Date(log.timestamp).toLocaleString()}
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                                                        {log.user.charAt(0)}
-                                                    </div>
-                                                    <span className="text-sm font-medium text-neutral-900">{log.user}</span>
+                                    <tr
+                                        key={log._id}
+                                        className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 cursor-pointer transition-colors"
+                                        onClick={() => handleLogClick(log)}
+                                    >
+                                        <td className="p-4 text-sm text-neutral-600 whitespace-nowrap">
+                                            {new Date(log.timestamp).toLocaleString()}
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                                                    {log.user.charAt(0)}
                                                 </div>
-                                            </td>
-                                            <td className="p-4 text-sm text-neutral-900 font-medium">
-                                                {log.action}
-                                            </td>
-                                            <td className="p-4 text-sm text-neutral-600">
-                                                {log.resource}
-                                            </td>
-                                            <td className="p-4">
-                                                <Badge variant={log.status === 'Success' ? 'success' : 'error'} size="sm">
-                                                    {log.status}
-                                                </Badge>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                {log.details && (
-                                                    <button className="p-1 hover:bg-neutral-200 rounded-md transition-colors">
-                                                        {expandedLogs.has(log._id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                        {expandedLogs.has(log._id) && log.details && (
-                                            <tr className="bg-neutral-50/50 border-b border-neutral-100">
-                                                <td colSpan="6" className="p-4 pt-0">
-                                                    <div className="bg-white rounded-xl border border-neutral-200 p-4 shadow-inner">
-                                                        <div className="flex items-center gap-2 mb-3 text-neutral-500">
-                                                            <Info size={14} />
-                                                            <span className="text-[11px] font-bold uppercase tracking-wider">Modification Details</span>
-                                                        </div>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                            {Object.entries(log.details).map(([key, value]) => (
-                                                                <div key={key} className="flex flex-col gap-1 p-2 bg-neutral-50 rounded-lg border border-neutral-100">
-                                                                    <span className="text-[10px] font-bold text-neutral-400 uppercase">{key}</span>
-                                                                    <span className="text-xs text-neutral-700 font-mono break-all line-clamp-2" title={typeof value === 'object' ? JSON.stringify(value) : value}>
-                                                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </React.Fragment>
+                                                <span className="text-sm font-medium text-neutral-900">{log.user}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-sm text-neutral-900 font-medium">
+                                            {log.action}
+                                        </td>
+                                        <td className="p-4 text-sm text-neutral-600">
+                                            {log.resource}
+                                        </td>
+                                        <td className="p-4">
+                                            <Badge variant={log.status === 'Success' ? 'success' : 'error'} size="sm">
+                                                {log.status}
+                                            </Badge>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button className="p-2 text-neutral-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-all">
+                                                <Eye size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
                 </div>
             </Card>
+
+            {/* Log Details Modal */}
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="Audit Log Details"
+                size="lg"
+            >
+                {selectedLog && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Performer Info */}
+                            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-100 space-y-3">
+                                <div className="flex items-center gap-2 text-neutral-500 mb-1">
+                                    <Info size={14} className="text-primary" />
+                                    <span className="text-[11px] font-bold uppercase tracking-wider">Performer Details</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">User Email</span>
+                                        <span className="text-sm font-medium text-neutral-900">{selectedLog.user}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">Role</span>
+                                        <Badge variant="secondary" size="sm">{selectedLog.role || 'Unknown'}</Badge>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">IP Address</span>
+                                        <span className="text-xs font-mono text-neutral-600">{selectedLog.ip || 'N/A'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Info */}
+                            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-100 space-y-3">
+                                <div className="flex items-center gap-2 text-neutral-500 mb-1">
+                                    <RefreshCw size={14} className="text-primary" />
+                                    <span className="text-[11px] font-bold uppercase tracking-wider">Action & Resource</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">Action Type</span>
+                                        <span className="text-sm font-bold text-primary">{selectedLog.action}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">Resource</span>
+                                        <span className="text-sm font-medium text-neutral-900">{selectedLog.resource}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-xs text-neutral-500">Status</span>
+                                        <Badge variant={selectedLog.status === 'Success' ? 'success' : 'error'} size="sm">
+                                            {selectedLog.status}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Timestamp */}
+                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-100">
+                            <div className="flex items-center gap-2">
+                                <Calendar size={14} className="text-neutral-400" />
+                                <span className="text-xs text-neutral-500">Event Timestamp</span>
+                            </div>
+                            <span className="text-sm font-medium text-neutral-900">
+                                {new Date(selectedLog.timestamp).toLocaleString()}
+                            </span>
+                        </div>
+
+                        {/* Modification Details */}
+                        {selectedLog.details && Object.keys(selectedLog.details).length > 0 ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-neutral-500">
+                                    <Info size={14} />
+                                    <span className="text-[11px] font-bold uppercase tracking-wider">Modification Details</span>
+                                </div>
+                                <div className="bg-neutral-900 rounded-xl p-4 overflow-x-auto border border-neutral-800 shadow-inner">
+                                    <pre className="text-xs font-mono text-primary-200 leading-relaxed">
+                                        {JSON.stringify(selectedLog.details, null, 2)}
+                                    </pre>
+                                </div>
+                            </div>
+                        ) : (selectedLog.action.includes('Create') || selectedLog.action.includes('Update')) && (
+                            <div className="p-4 rounded-xl bg-neutral-50 border border-dashed border-neutral-200 text-center">
+                                <p className="text-xs text-neutral-400italic">No specific field modifications captured for this event.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };

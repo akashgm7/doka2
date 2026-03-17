@@ -170,4 +170,31 @@ const logoutUser = async (req, res) => {
     }
 };
 
-module.exports = { loginUser, registerUser, getMe, logoutUser };
+// @desc    Get Developer Credentials (Development Only)
+// @route   GET /api/auth/dev-credentials
+// @access  Public (But ONLY in Development mode)
+const getDevCredentials = (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+        res.status(403);
+        throw new Error('Forbidden: Not available in production');
+    }
+
+    const devCredentials = [
+        { label: 'Super Admin', email: 'superadmin@doka.com', password: 'password123' },
+        { label: 'Brand Admin', email: 'brand@doka.com', password: 'password123' },
+        { label: 'Area Manager', email: 'area@doka.com', password: 'password123' },
+        { label: 'Store Manager', email: 'store@doka.com', password: 'password123' },
+        { label: 'Factory Manager', email: 'factory@doka.com', password: 'password123' },
+        { label: 'Customer', email: 'customer@doka.com', password: 'password123' },
+    ];
+
+    res.json(devCredentials);
+};
+
+module.exports = {
+    registerUser,
+    loginUser,
+    getMe,
+    logoutUser,
+    getDevCredentials
+};

@@ -22,7 +22,13 @@ const getUsers = async (req, res) => {
 
         // Scope-level scoping
         if (currentUser.scopeLevel === 'Brand') {
-            query.assignedBrand = currentUser.assignedBrand;
+            // Include users assigned to the brand OR all global customers
+            query = {
+                $or: [
+                    { assignedBrand: currentUser.assignedBrand },
+                    { role: 'Customers' }
+                ]
+            };
         } else if (currentUser.scopeLevel === 'Outlet') {
             query.assignedOutlets = { $in: currentUser.assignedOutlets || [] };
             query.assignedBrand = currentUser.assignedBrand; // Optional, to prevent leaking
@@ -56,14 +62,12 @@ const createUser = async (req, res) => {
         // Generate a secure temporary password
         const tempPassword = generateTempPassword();
 
-        // Hash the temp password before saving
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(tempPassword, salt);
-
+        // The User model has a pre('save') hook that automatically hashes the password.
+        // We pass the raw tempPassword here, otherwise it gets double-hashed!
         const user = await User.create({
             name,
             email,
-            password: hashedPassword,
+            password: tempPassword,
             role,
             assignedBrand: brandId || req.body.assignedBrand,
             assignedOutlets,

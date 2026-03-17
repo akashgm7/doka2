@@ -7,7 +7,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const { dokaConnection } = require('./config/db');
 const User = require('./models/User');
 
-async function listUsers() {
+async function checkUser() {
     try {
         console.log('Connecting to DB...');
         await new Promise((resolve) => {
@@ -16,15 +16,20 @@ async function listUsers() {
         });
         console.log('DB Connected.');
 
-        const users = await User.find({}).select('name email role assignedBrand status').lean();
-        console.log('TOTAL USERS:', users.length);
-        console.log(JSON.stringify(users, null, 2));
+        const email = 'akashrocks843@gmail.com';
+        const user = await User.findOne({ email });
+
+        if (user) {
+            console.log('User FOUND:', JSON.stringify(user, null, 2));
+        } else {
+            console.log('User NOT found.');
+        }
     } catch (error) {
-        console.error('Error listing users:', error);
+        console.error('Error checking user:', error);
     } finally {
         mongoose.connection.close();
         process.exit();
     }
 }
 
-listUsers();
+checkUser();

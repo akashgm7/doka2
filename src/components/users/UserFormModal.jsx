@@ -9,12 +9,14 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
         name: '',
         email: '',
         role: '',
+        brandId: '', // Added brandId to state
         assignedOutlets: [],
         assignedFactory: '',
         status: 'Active'
     });
     const [loading, setLoading] = useState(false);
     const [roles, setRoles] = useState([]);
+    const [brands, setBrands] = useState([]); // New state for brands list
     const [locations, setLocations] = useState([]);
 
     const isEditMode = !!initialData;
@@ -24,34 +26,34 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
             // Fetch Roles
             try {
                 // Safety alias for brandId
-                const brandId = currentUser.brandId || currentUser.assignedBrand;
+                const brandId = currentUser.brandId || currentUser.assignedBrand || formData.brandId;
 
                 const rolesData = await roleService.getRoles();
-                // Filter roles based on hierarchy if needed, for now show all non-system or appropriate ones
-                // For simplicity, Super Admin sees all.
                 let visibleRoles = rolesData;
                 if (currentUser.role !== 'Super Admin') {
-                    // Brand Admin can only create operational roles
                     if (currentUser.role === 'Brand Admin') {
                         visibleRoles = rolesData.filter(r => ['Area Manager', 'Store Manager', 'Store User', 'Factory Manager'].includes(r.name));
                     } else if (currentUser.role === 'Area Manager') {
-                        // Area Manager can only create Store Staff
                         visibleRoles = rolesData.filter(r => ['Store Manager', 'Store User'].includes(r.name));
                     } else {
-                        // Other roles might not have create permission, but as safeguard:
                         visibleRoles = [];
                     }
                 }
                 setRoles(visibleRoles);
 
-                // Fetch Locations (Scoped to Brand)
-                let locData = await brandService.getLocations(brandId);
+                // For Super Admin, fetch available brands
+                if (currentUser.role === 'Super Admin') {
+                    const allBrands = await brandService.getBrands();
+                    setBrands(allBrands);
+                }
 
-                // If Area Manager, restrict locations to assigned outlets
+                // Fetch Locations (Scoped to Brand if available)
+                // If Super Admin has selected a brand in the form, scope to that. 
+                // Otherwise if they are Brand Admin, scope to theirs.
+                const effectiveBrandId = brandId;
+                let locData = await brandService.getLocations(effectiveBrandId);
+
                 if (currentUser.role === 'Area Manager' && currentUser.assignedOutlets) {
-                    // Filter locData to only those in assignedOutlets
-                    // assignedOutlets might be names or IDs. Mock uses names ('outlet-001'), locData uses IDs/Names.
-                    // Let's assume broad matching for mock safety
                     locData = locData.filter(l => currentUser.assignedOutlets.includes(l.name) || currentUser.assignedOutlets.includes(l.id));
                 }
 
@@ -69,14 +71,17 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
 
     useEffect(() => {
         if (initialData) {
-            // Remove brandId from initial data if it exists to avoid confusion, though it won't be in state
-            const { brandId, ...rest } = initialData;
-            setFormData(rest);
+            // Preservation logic: Ensure we don't drop brandId or assignedBrand
+            const data = { ...initialData };
+            // Unify brandId key if missing in form data state but present in model
+            data.brandId = data.brandId || data.assignedBrand || '';
+            setFormData(data);
         } else {
             setFormData({
                 name: '',
                 email: '',
                 role: '',
+                brandId: '',
                 assignedOutlets: [],
                 assignedFactory: currentUser.assignedFactory || '',
                 status: 'Active'
@@ -154,7 +159,7 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
                                     required
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                                     value={formData.role}
-                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                    onChange={(e) => setFormData({ ...formData, role: e.target.value, assignedOutlets: [], assignedFactory: '' })}
                                     disabled={isEditMode && formData.role === 'Super Admin'}
                                 >
                                     <option value="">Select Role</option>
@@ -163,6 +168,24 @@ const UserFormModal = ({ isOpen, onClose, currentUser, onSubmit, initialData = n
                                     ))}
                                 </select>
                             </div>
+
+                            {/* Brand Selection for Super Admin */}
+                            {currentUser.role === 'Super Admin' && (formData.role && formData.role !== 'Super Admin') && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Assign Brand</label>
+                                    <select
+                                        required
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                                        value={formData.brandId || ''}
+                                        onChange={(e) => setFormData({ ...formData, brandId: e.target.value, assignedOutlets: [], assignedFactory: '' })}
+                                    >
+                                        <option value="">Select Brand</option>
+                                        {brands.map(brand => (
+                                            <option key={brand.id} value={brand.id}>{brand.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             {/* Location Assignment based on Role Scope */}
                             {/* Outlets: For scopes defined as Outlet */}

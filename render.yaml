@@ -1,0 +1,32 @@
+services:
+  # Admin Frontend (React/Vite)
+  - type: web
+    name: cake-admin-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: cake-admin-backend
+          type: web
+          property: host
+
+  # Admin Backend (Node.js/Express)
+  - type: web
+    name: cake-admin-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    rootDirectory: server
+    envVars:
+      - key: MONGODB_URI
+        sync: false # User will provide the shared MongoDB URL
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 5002
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false

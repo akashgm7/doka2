@@ -13,6 +13,21 @@ const Login = () => {
     const location = useLocation();
     const { user, isAuthenticated, isLoading, error } = useSelector((state) => state.auth);
 
+    // Dev login state
+    const [devCredentials, setDevCredentials] = useState([]);
+
+    // Fetch dev credentials if in DEV mode
+    useEffect(() => {
+        if (import.meta.env.DEV) {
+            import('../utils/axiosConfig').then((module) => {
+                const api = module.default;
+                api.get('/auth/dev-credentials')
+                    .then(res => setDevCredentials(res.data))
+                    .catch(err => console.warn('Could not load dev credentials:', err));
+            });
+        }
+    }, []);
+
     // Role-based redirect mapping
     const getDashboardPath = (role) => {
         switch (role) {
@@ -87,6 +102,31 @@ const Login = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {import.meta.env.DEV && devCredentials.length > 0 && (
+                            <div className="group mb-6 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                                <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-indigo-400 flex items-center gap-2">
+                                    <ShieldCheck className="w-4 h-4" />
+                                    Fast Login (Dev Mode)
+                                </label>
+                                <select
+                                    className="block w-full px-4 py-2 bg-neutral-900/50 border border-indigo-500/30 rounded-xl text-neutral-200 focus:ring-2 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-inner"
+                                    onChange={(e) => {
+                                        const selected = devCredentials.find(c => c.email === e.target.value);
+                                        if (selected) {
+                                            setEmail(selected.email);
+                                            setPassword(selected.password);
+                                        }
+                                    }}
+                                    defaultValue=""
+                                >
+                                    <option value="" disabled>Select a role to auto-fill...</option>
+                                    {devCredentials.map((cred, idx) => (
+                                        <option key={idx} value={cred.email}>{cred.label} ({cred.email})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         <div className="space-y-4">
                             <div className="group">
                                 <label htmlFor="email" className="block text-xs font-medium uppercase tracking-wider mb-2 text-neutral-400">

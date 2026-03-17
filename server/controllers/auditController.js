@@ -14,8 +14,7 @@ const getLogs = async (req, res) => {
         // Dynamic scope-level filtering for audit logs
         if (req.user.scopeLevel === 'Brand') {
             query.brandId = req.user.assignedBrand;
-            // A brand admin sees everyone mostly except Systems
-            query.role = { $nin: ['Super Admin'] };
+            // Removed role exclusion so Brand Admins can see Super Admin actions on their brand resources
         } else if (req.user.scopeLevel === 'Outlet') {
             query.outletId = { $in: req.user.assignedOutlets };
             // Outlet level scopes see outlet employees and customers
