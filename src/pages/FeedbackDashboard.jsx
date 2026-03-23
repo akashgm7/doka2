@@ -30,7 +30,13 @@ const FeedbackDashboard = () => {
         if (!canView) return;
         loadFeedback();
 
-        const socket = io(`http://${window.location.hostname}:5002`);
+        const getSocketURL = () => {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (apiUrl) return apiUrl.replace(/\/api\/?$/, '');
+            return `http://${window.location.hostname}:5002`;
+        };
+
+        const socket = io(getSocketURL());
         socket.on('connect', () => console.log('[Feedback Dashboard] Socket connected'));
 
         socket.on('feedbackAdded', (data) => {

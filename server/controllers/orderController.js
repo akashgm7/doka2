@@ -186,17 +186,21 @@ const updateOrderStatus = async (req, res) => {
             if (currentStatus !== requestedStatus) {
                 const allowed = validTransitions[currentStatus] || [];
                 if (!allowed.includes(requestedStatus)) {
-                    console.error(`[TRANSITION ERROR] ${currentStatus} -> ${requestedStatus} NOT ALLOWED`);
+                    console.error(`[TRANSITION ERROR] ${currentStatus} -> ${requestedStatus} NOT ALLOWED for order ${order._id}`);
                     return res.status(400).json({
                         message: `Invalid status transition: ${order.status} -> ${status}`
                     });
                 }
+                
+                console.log(`[TRANSITION SUCCESS] Updating status: ${order.status} -> ${requestedStatus}`);
                 order.status = requestedStatus;
 
                 // Sync legacy delivered flag if needed
                 if (requestedStatus === 'DELIVERED') {
                     order.isDelivered = true;
                 }
+            } else {
+                console.log(`[STATUS UNCHANGED] Order ${order._id} is already ${requestedStatus}`);
             }
         }
 
@@ -248,7 +252,8 @@ const submitFeedback = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to submit feedback for this order' });
         }
 
-        if (order.status !== 'DELIVERED') {
+        const currentStatus = (order.status || '').toUpperCase();
+        if (currentStatus !== 'DELIVERED' && currentStatus !== 'COMPLETED' && !order.isDelivered) {
             return res.status(400).json({ message: 'Feedback can only be submitted for delivered orders' });
         }
 

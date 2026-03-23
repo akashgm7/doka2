@@ -27,6 +27,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
     const [loadingDelivery, setLoadingDelivery] = useState(false);
     const [internalNotes, setInternalNotes] = useState('');
     const [currentOrder, setCurrentOrder] = useState(order); // Local state for immediate updates
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         if (isOpen && order) {
@@ -132,8 +133,12 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
     };
 
     const handleStatusUpdate = async (status) => {
+        if (isProcessing) return;
+        
         const id = getOrderId();
         console.log('[DEBUG] handleStatusUpdate initiating:', { id, status });
+        
+        setIsProcessing(true);
         try {
             if (onUpdateStatus && id) {
                 const updatedOrder = await onUpdateStatus(id, status);
@@ -143,32 +148,36 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
             }
         } catch (error) {
             console.error("Status update failed", error);
+        } finally {
+            setIsProcessing(false);
         }
     };
 
     const Actions = () => {
         const STATUS_FLOW = ["PENDING", "CONFIRMED", "IN_PRODUCTION", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
 
-        // MMC Read-only Guard
-        if (displayOrder.isMMC && userRole !== 'Super Admin' && userRole !== 'Factory User' && userRole !== 'Factory Manager') {
-            return (
-                <div className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg text-xs font-semibold">
-                    <AlertCircle size={14} />
-                    <span>MMC Order - Managed by Factory</span>
-                </div>
-            );
-        }
+        // Aliases for mapping legacy or dashboard-level statuses
+        const statusMap = {
+            'PREPARING': 'IN_PRODUCTION',
+            'PREPARATION': 'IN_PRODUCTION',
+            'PICKUP_READY': 'READY'
+        };
 
-        const currentIndex = STATUS_FLOW.indexOf(displayOrder.status?.toUpperCase());
+        const currentStatusRaw = displayOrder.status?.toUpperCase();
+        const normalizedStatus = statusMap[currentStatusRaw] || currentStatusRaw;
+        
+        const currentIndex = STATUS_FLOW.indexOf(normalizedStatus);
+        
+        // Determination of next logical status
         let nextStatus = currentIndex >= 0 && currentIndex < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIndex + 1] : null;
 
-        // Skip OUT_FOR_DELIVERY for Pickup
-        if (displayOrder.status?.toUpperCase() === 'READY' && displayOrder.deliveryMode === 'Pickup') {
+        // Specialized logic for Delivery Mode
+        if (normalizedStatus === 'READY' && displayOrder.deliveryMode === 'Pickup') {
             nextStatus = 'DELIVERED';
         }
 
         const canProgress = ['Brand Admin', 'Store Manager', 'Area Manager', 'Factory User', 'Factory Manager'].includes(userRole);
-        const canCancel = ['PENDING', 'CONFIRMED'].includes(displayOrder.status?.toUpperCase());
+        const canCancel = ['PENDING', 'CONFIRMED'].includes(normalizedStatus);
 
         return (
             <div className="flex gap-2 items-center w-full">
@@ -177,8 +186,9 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                         size="sm"
                         variant="primary"
                         onClick={() => handleStatusUpdate(nextStatus)}
+                        isLoading={isProcessing}
                     >
-                        Move to {nextStatus}
+                        Next Process: {nextStatus}
                     </Button>
                 )}
 
@@ -345,7 +355,12 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
                                 'OUT_FOR_DELIVERY': 'Delivery',
                                 'DELIVERED': 'Delivered'
                             };
-                            const currentIdx = steps.indexOf(order.status);
+
+                            const currentStatusRaw = displayOrder.status?.toUpperCase();
+                            const statusMap = { 'PREPARING': 'IN_PRODUCTION', 'PICKUP_READY': 'READY' };
+                            const normalizedCurrent = statusMap[currentStatusRaw] || currentStatusRaw;
+                            
+                            const currentIdx = steps.indexOf(normalizedCurrent);
                             const stepIdx = steps.indexOf(step);
                             const isCompleted = stepIdx <= currentIdx;
                             const isCurrent = stepIdx === currentIdx;

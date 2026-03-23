@@ -123,7 +123,26 @@ dokaConnection.once('open', () => {
             } catch (err) { console.error("Auto-notification Error:", err); }
         } else if (change.operationType === 'update') {
             console.log(`[Socket] Order updated: ${change.documentKey._id}`);
-            io.emit('order_updated', { id: change.documentKey._id, updates: change.updateDescription.updatedFields });
+            const updatedFields = change.updateDescription.updatedFields;
+            io.emit('order_updated', { id: change.documentKey._id, updates: updatedFields });
+
+            // If feedback was added/updated, emit specific feedback event
+            if (updatedFields.feedback || (updatedFields['feedback.rating'])) {
+                try {
+                    const fullOrder = await orderCollection.findOne({ _id: change.documentKey._id });
+                    if (fullOrder && fullOrder.feedback) {
+                        io.emit('feedbackAdded', {
+                            orderId: fullOrder._id,
+                            brandId: fullOrder.brandId,
+                            storeId: fullOrder.storeId,
+                            orderRef: fullOrder.orderId || fullOrder._id,
+                            customerName: 'Customer', // In a full implementation, join with User
+                            feedback: fullOrder.feedback
+                        });
+                        console.log(`[Socket] Broadcasting new feedback for order: ${fullOrder._id}`);
+                    }
+                } catch (err) { console.error("Feedback Broadcast Error:", err); }
+            }
         }
     });
 
