@@ -116,7 +116,8 @@ const getDashboardStats = async (req, res) => {
         }
     } else if (scopeLevel === 'Factory') {
         baseQuery.isMMC = true;
-        if (assignedFactory) baseQuery.storeId = assignedFactory;
+        // Optionally filter by assigned factory if multiple factories exist
+        // if (assignedFactory) baseQuery.storeId = assignedFactory;
     } else if (scopeLevel === 'None') {
         baseQuery._id = null;
     }
@@ -335,35 +336,53 @@ const getDashboardStats = async (req, res) => {
         }
 
         // Factory Specific Metrics
-        let mmcQueue = 0;
+        let mmcQueueOrders = [];
+        let mmcQueueCount = 0;
         let calendar = [];
         if (role === 'Factory Manager' || role === 'Factory User' || role === 'Super Admin') {
-            mmcQueue = await Order.countDocuments({
+            // Include all "work in progress" or "new" MMC orders
+            const queueStatuses = ['PENDING', 'Pending', 'CONFIRMED', 'Confirmed', 'IN_PRODUCTION', 'Preparing', 'Ready', 'READY'];
+            
+            mmcQueueCount = await Order.countDocuments({
                 ...baseQuery,
                 isMMC: true,
-                status: { $in: ['Pending', 'Preparing'] }
+                status: { $in: queueStatuses }
             });
 
-            // Dynamic production planning based on range
-            const calendarDays = diffDays > 0 ? diffDays : 7;
-            for (let i = 0; i <= calendarDays; i++) {
-                const date = new Date(startDate);
-                date.setDate(date.getDate() + i);
-                if (date > actualEndDate && range !== 'Today') break;
+            mmcQueueOrders = await Order.find({
+                ...baseQuery,
+                isMMC: true,
+                status: { $in: queueStatuses }
+            }).sort({ createdAt: -1 }).limit(10);
 
-                const dateStr = date.toISOString().split('T')[0];
-                const count = await Order.countDocuments({
-                    ...baseQuery,
-                    isMMC: true,
-                    createdAt: { $gte: date, $lt: new Date(date.getTime() + 86400000) }
-                });
-                calendar.push({
-                    date: dateStr.slice(5),
-                    orders: count,
-                    status: count > 5 ? 'Full' : 'Available'
-                });
-                if (calendar.length >= 10) break; // Limit calendar view
-            }
+            // Individual orders for the MMC Queue list
+            const rawQueueOrders = await Order.find({
+                ...baseQuery,
+                isMMC: true,
+                status: { $in: queueStatuses }
+            }).sort({ createdAt: -1 }).limit(10);
+
+            mmcQueueOrders = rawQueueOrders.map(o => ({
+                orderNumber: o.orderId || o._id.toString().slice(-6).toUpperCase(),
+                details: o.orderItems?.length > 0 ? o.orderItems[0].name : 'Special Request',
+                dueDate: o.createdAt ? new Date(o.createdAt.getTime() + 86400000).toLocaleDateString() : 'Today',
+                status: o.status
+            }));
+
+            // Individual orders for Today's Fulfillment
+            const todayStart = getISTStartOfDay(new Date());
+            const todayEnd = getISTEndOfDay(new Date());
+            const todayOrders = await Order.find({
+                isMMC: true,
+                createdAt: { $gte: todayStart, $lte: todayEnd }
+            }).limit(10);
+
+            calendar = todayOrders.map(o => ({
+                time: o.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                outletName: o.storeId || 'Central Kitchen',
+                itemsCount: o.orderItems?.length || 0,
+                orderNumber: o.orderId || o._id.toString().slice(-6).toUpperCase()
+            }));
         }
 
         // Delivery Health (Success Rate)
@@ -396,7 +415,8 @@ const getDashboardStats = async (req, res) => {
             revenueTrend,
             recentOrders: formattedRecentOrders,
             outlets: outletsPerformance,
-            mmcQueue,
+            mmcQueue: mmcQueueOrders,
+            mmcQueueCount: mmcQueueCount,
             calendar,
             slotUtilization: (role === 'Factory Manager' || role === 'Factory User') ? '75%' : undefined,
             deliveryHealth: {
