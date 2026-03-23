@@ -189,6 +189,7 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
         const statusMap = {
             'PREPARING': 'IN_PRODUCTION',
             'PREPARATION': 'IN_PRODUCTION',
+            'BAKING': 'IN_PRODUCTION',
             'PICKUP_READY': 'READY'
         };
 

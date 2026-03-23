@@ -41,7 +41,8 @@ const getOrders = async (req, res) => {
         }
     } else if (scopeLevel === 'Factory') {
         query.isMMC = true;
-        if (req.user.assignedFactory) query.storeId = req.user.assignedFactory;
+        // Relaxed: MMC orders might not have a storeId yet, so show all isMMC orders to Factory Managers.
+        // if (req.user.assignedFactory) query.storeId = req.user.assignedFactory;
     } else if (scopeLevel === 'None') {
         query._id = null;
     }
