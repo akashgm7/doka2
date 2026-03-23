@@ -3,6 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { Package, CheckCircle, XCircle, Play, Truck, Check, DollarSign, MapPin, Navigation, AlertCircle, AlertTriangle, Megaphone } from 'lucide-react';
 import { deliveryService } from '../../services/deliveryService';
+import { getSocket } from '../../utils/socketConfig';
 import toast from 'react-hot-toast';
 
 const StatusBadge = ({ status }) => {
@@ -34,6 +35,34 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
             fetchDeliveryInfo();
             setInternalNotes(order.internalNotes || '');
             setCurrentOrder(order); // Sync with prop when order changes
+
+            // Direct Socket Listener for real-time tracking
+            const socket = getSocket();
+            const orderId = order._id || order.id;
+
+            const handleOrderUpdate = (data) => {
+                if (data.id === orderId || data.orderId === orderId) {
+                    console.log('[Socket] Real-time modal update received:', data);
+                    // Update state with new fields if present in updates (from server.js) 
+                    // or full status (from orderController.js)
+                    setCurrentOrder(prev => {
+                        const newStatus = data.status || (data.updates && data.updates.status);
+                        if (newStatus && newStatus !== prev.status) {
+                            toast.success(`Order Status Updated: ${newStatus}`, { icon: '🔔' });
+                            return { ...prev, status: newStatus, ...data.updates };
+                        }
+                        return { ...prev, ...data.updates };
+                    });
+                }
+            };
+
+            socket.on('order_updated', handleOrderUpdate);
+            socket.on('orderStatusUpdated', handleOrderUpdate);
+
+            return () => {
+                socket.off('order_updated', handleOrderUpdate);
+                socket.off('orderStatusUpdated', handleOrderUpdate);
+            };
         } else {
             setDelivery(null);
             setInternalNotes('');
@@ -367,9 +396,9 @@ const OrderDetailsModal = ({ isOpen, onClose, order, onUpdateStatus, onCancelOrd
 
                             return (
                                 <div key={step} className="flex flex-col items-center relative z-10 w-full">
-                                    <div className={`w-3 h-3 rounded-full mb-1 border-2 transition-colors ${isCompleted ? 'bg-primary border-primary' : 'bg-white border-gray-300'
-                                        } ${isCurrent ? 'ring-2 ring-primary/30' : ''}`} />
-                                    <span className={`text-[10px] uppercase font-semibold ${isCompleted ? 'text-primary' : 'text-gray-400'
+                                    <div className={`w-3 h-3 rounded-full mb-1 border-2 transition-all duration-500 ${isCompleted ? 'bg-primary border-primary shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-white border-neutral-200'
+                                        } ${isCurrent ? 'ring-4 ring-primary/20 scale-125 animate-live-pulse' : ''}`} />
+                                    <span className={`text-[10px] uppercase font-bold tracking-tight transition-colors duration-300 ${isCompleted ? 'text-primary' : 'text-neutral-400'
                                         }`}>{labels[step]}</span>
 
                                     {/* Connector Line */}

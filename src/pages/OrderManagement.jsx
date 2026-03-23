@@ -10,7 +10,7 @@ import OrderDetailsModal, { StatusBadge } from '../components/orders/OrderDetail
 import DateRangeFilter from '../components/dashboard/DateRangeFilter';
 import { Search, Filter, MapPin, AlertCircle, RefreshCw, ShoppingBag, Clock, PackageCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { io } from 'socket.io-client';
+import { getSocket } from '../utils/socketConfig';
 import FeedbackDashboard from './FeedbackDashboard';
 
 const OrderManagement = () => {
@@ -54,17 +54,7 @@ const OrderManagement = () => {
 
     // Socket.io for Real-time Updates
     useEffect(() => {
-        const getSocketURL = () => {
-            const apiUrl = import.meta.env.VITE_API_URL;
-            if (apiUrl) {
-                // Remove /api from the end to get the base URL
-                return apiUrl.replace(/\/api\/?$/, '');
-            }
-            // Fallback for local dev
-            return `http://${window.location.hostname}:5002`;
-        };
-
-        const socket = io(getSocketURL());
+        const socket = getSocket();
 
         socket.on('connect', () => {
             console.log('Socket Connected to backend for real-time updates');
